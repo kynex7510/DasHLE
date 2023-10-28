@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED on)
 
 project(GDACL)
 
-add_subdirectory(dynarmic)
+add_subdirectory(external/dynarmic)
 
 include_directories(
 	include
