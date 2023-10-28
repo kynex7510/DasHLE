@@ -1,0 +1,3 @@
+[submodule "dynarmic"]
+	path = dynarmic
+	url = https://github.com/merryhime/dynarmic/
