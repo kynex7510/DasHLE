@@ -1,3 +1,0 @@
-[submodule "dynarmic"]
-	path = external/dynarmic
-	url = https://github.com/merryhime/dynarmic/
