@@ -1,5 +1,5 @@
-#ifndef _GDACL_ELF_H
-#define _GDACL_ELF_H
+#ifndef _DASHLE_ELF_H
+#define _DASHLE_ELF_H
 
 #include <elf.h>
 
@@ -7,9 +7,9 @@
 #include <span>
 #include <vector>
 
-#define ELF_ASSERT_CONFIG(cfg) static_assert(::gdacl::elf::ConfigType<cfg>)
+#define ELF_ASSERT_CONFIG(cfg) static_assert(::dashle::elf::ConfigType<cfg>)
 
-namespace gdacl::elf {
+namespace dashle::elf {
 
 // clang-format off
 template <typename T>
@@ -140,6 +140,6 @@ Segments<CFG> getSegments(const typename CFG::HeaderType *header,
     return buffer;
 }
 
-} // namespace gdacl::elf
+} // namespace dashle::elf
 
-#endif /* _GDACL_ELF_H */
+#endif /* _DASHLE_ELF_H */

@@ -1,11 +1,11 @@
-#include "GDACL.h"
+#include "DasHLE.h"
 #include "ELF.h"
 
 #include <fstream>
 #include <vector>
 
-using namespace gdacl;
-using namespace binary;
+using namespace dashle;
+using namespace dashle::binary;
 
 // Config
 
@@ -24,18 +24,9 @@ ELF_ASSERT_CONFIG(ConfigAarch64);
 
 // Binary
 
-struct BinaryData {
-    Type type;
-    std::span<std::uint8_t> codeBuffer;
-};
-
-constexpr std::size_t alignSize(std::size_t size, std::size_t align) {
-    return (size + (align - 1)) & ~(align - 1);
-}
-
 template <elf::ConfigType CFG>
-static std::size_t getSegmentsAllocSize(const elf::Segments<CFG> &segments) {
-    std::size_t allocSize = 0;
+static usize getSegmentsAllocSize(const elf::Segments<CFG> &segments) {
+    usize allocSize = 0;
 
     for (const auto segment : segments) {
         if (segment->p_memsz < segment->p_filesz) {
@@ -52,8 +43,9 @@ static std::size_t getSegmentsAllocSize(const elf::Segments<CFG> &segments) {
     return allocSize;
 }
 
-template <elf::ConfigType CFG>
-static Error loaderImpl(BinaryData &binaryData, const std::span<const std::uint8_t> buffer) {
+template <typename CFG>
+Error Binary::loaderImpl(const std::span<const u8> buffer) {
+    static_assert(elf::ConfigType<CFG>);
     auto header = elf::getHeader<CFG>(buffer);
     if (!header)
         return Error::InvalidObject;
@@ -68,28 +60,39 @@ static Error loaderImpl(BinaryData &binaryData, const std::span<const std::uint8
         return Error::InvalidSegments;
 
     // Allocate memory and map segments.
-    auto p = new (std::nothrow) std::uint8_t[regionSize];
+    auto p = m_Allocator.allocate(0u, regionSize, false);
     if (!p)
         return Error::NoMemory;
+
+    /*
+    if (auto block = mman.blockFromVAddr(p)) {
+        p = block->virtualToHost(p);
+    }
+
+    if (!p) {
+        m_Allocator.free(p);
+        return Error::NoMemory;
+    }
+    */
 
     for (auto const segment : loadSegments) {
         std::copy(
             buffer.data() + segment->p_offset,
             buffer.data() + segment->p_offset + segment->p_filesz,
-            p + segment->p_vaddr);
+            reinterpret_cast<u8 *>(p) + segment->p_vaddr);
     }
 
     // Apply relocations.
     // TODO
 
-    binaryData.type = CFG::BINARY_TYPE;
-    binaryData.codeBuffer = std::span{p, regionSize};
+    m_Type = CFG::BINARY_TYPE;
+    m_CodeBuffer = std::span{reinterpret_cast<u8 *>(p), regionSize};
     return Error::Success;
 }
 
-Error Base::load(const stdfs::path &path) {
+Error Binary::load(const stdfs::path &path) {
     // Read binary.
-    std::vector<std::uint8_t> buffer;
+    std::vector<u8> buffer;
     std::ifstream fileHandle(path, std::ios::ate | std::ios::binary);
     if (!fileHandle.is_open())
         return Error::OpenFailed;
@@ -99,12 +102,11 @@ Error Base::load(const stdfs::path &path) {
     fileHandle.read(reinterpret_cast<char *>(buffer.data()), buffer.size());
 
     // Load binary in memory.
-    BinaryData binaryData = {};
     Error error = Error::UnknownArch;
 
-#define CFG_ARCH_CASE(cfg)                           \
-    case cfg::ARCH:                                  \
-        error = loaderImpl<cfg>(binaryData, buffer); \
+#define CFG_ARCH_CASE(cfg)               \
+    case cfg::ARCH:                      \
+        error = loaderImpl<cfg>(buffer); \
         break;
 
     switch (elf::detectArch(buffer)) {
@@ -114,19 +116,10 @@ Error Base::load(const stdfs::path &path) {
 
 #undef CFG_ARCH_BASE
 
-    if (error != Error::Success)
-        return error;
-
-    m_Type = binaryData.type;
-    m_CodeBuffer = binaryData.codeBuffer;
-    return Error::Success;
+    return error;
 }
 
-std::uintptr_t Base::getSymbolAddress(const std::string &sym) const {
-    return 0;
-}
-
-std::string binary::getErrorAsString(Error error) {
+std::string binary::errorAsString(Error error) {
 #define ERROR_CASE(s) \
     case Error::s:    \
         return #s;
@@ -147,7 +140,7 @@ std::string binary::getErrorAsString(Error error) {
     return {};
 }
 
-std::string binary::getTypeAsString(Type type) {
+std::string binary::typeAsString(Type type) {
 #define TYPE_CASE(s) \
     case Type::s:    \
         return #s;

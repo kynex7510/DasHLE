@@ -1,10 +1,10 @@
-# gdacl
+# DasHLE
 
-Geometry Dash Android Compatibility Layer
+Run android versions of Geometry Dash through HLE.
 
 ```
 mkdir build
 cd build
 cmake ..
-make -j16
+make -j32
 ```
