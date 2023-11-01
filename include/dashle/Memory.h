@@ -3,16 +3,25 @@
 
 #include "Base.h"
 
-#include <set>
+#include <memory>
+#include <expected>
+#include <optional>
 
 namespace dashle::memory {
 
+enum class Error {
+    InvalidSize,
+    NoVirtualMemory,
+    NoHostMemory,
+    NoMemoryBlock,
+};
+
 /*
-    Represents a memory range which has been reserved by the allocator.
+    Represents a memory range which has been allocated for target use.
     Each memory block maps to a contiguous block of memory in the address space of the host process.
     Memory blocks are unique, no two blocks ever overlap for both virtual and host range.
 */
-class MemoryBlock {
+class MemoryBlock final {
     friend class Allocator;
 
     uaddr m_HostBase = 0u;
@@ -20,99 +29,106 @@ class MemoryBlock {
     usize m_Size = 0u;
     bool m_ReadOnly = false;
 
+    MemoryBlock() {}
+
 public:
     uaddr hostBase() const { return m_HostBase; }
     uaddr virtualBase() const { return m_VirtualBase; }
     usize size() const { return m_Size; }
     bool readOnly() const { return m_ReadOnly; }
 
-    uaddr virtualToHost(uaddr vaddr);
+    void setHostBase(uaddr hbase) { m_HostBase = hbase; }
+    void setVirtualBase(uaddr vbase) { m_VirtualBase = vbase; }
+    void setSize(usize size) { m_Size = size; }
+    void setReadOnly(bool readOnly) { m_ReadOnly = readOnly; }
+
+    uaddr virtualToHost(uaddr vaddr) const;
 
     // Read from host buffer.
-    bool read(uaddr hfrom, uaddr vto, usize size);
+    bool read(uaddr hfrom, uaddr vto, usize size) const;
 
     // Write to host buffer.
-    bool write(uaddr vfrom, uaddr hto, usize size);
+    bool write(uaddr vfrom, uaddr hto, usize size) const;
 
     /* Optimized methods */
 
-    u8 read8(uaddr vaddr);
-    u16 read16(uaddr vaddr);
-    u32 read32(uaddr vaddr);
-    u64 read64(uaddr vaddr);
-    void write8(uaddr vaddr, u8 value);
-    void write16(uaddr vaddr, u16 value);
-    void write32(uaddr vaddr, u32 value);
-    void write64(uaddr vaddr, u64 value);
+    u8 read8(uaddr vaddr) const;
+    u16 read16(uaddr vaddr) const;
+    u32 read32(uaddr vaddr) const;
+    u64 read64(uaddr vaddr) const;
+    bool write8(uaddr vaddr, u8 value) const;
+    bool write16(uaddr vaddr, u16 value) const;
+    bool write32(uaddr vaddr, u32 value) const;
+    bool write64(uaddr vaddr, u64 value) const;
 };
 
-/*
-    Comparator for memory blocks, acts like std::less in the general case.
-    When size = 0 we're comparing the block with a virtual address.
-*/
-struct MemoryBlockComparator {
-    constexpr bool operator()(const MemoryBlock &a, const MemoryBlock &b) {
-        if (!a.size()) {
-            // A is the virtual address. Comp(A, B) returns true if A < B.
-            // Hence comp(A, B) = vaddr < block.base.
-            return a.virtualBase() < b.virtualBase();
-        }
-
-        if (!b.size()) {
-            // B is the virtual address. Comp(A, B) returns true if A < B.
-            // Hence comp(A, B) = (block.base + block.size) < vaddr.
-            return (a.virtualBase() + a.size()) < b.virtualBase();
-        }
-
-        // Generic case: both A and B are blocks.
-        // We know they can't overlap, hence comp(A, B) = A.base < B.base.
-        return a.virtualBase() < b.virtualBase();
-    }
-};
+struct AllocatorData;
 
 class Allocator {
-public:
-    using MemoryBlockSet = std::set<MemoryBlock, MemoryBlockComparator>;
-
 private:
-    // MemoryBlockSet m_MemBlocks;
+    std::unique_ptr<AllocatorData> m_Data;
 
-    /*
-    auto find(uaddr vaddr) const {
+    // These functions are responsible for updating the block and the memory counter.
+    virtual bool hostAlloc(MemoryBlock &block) = 0;
+    virtual void hostFree(MemoryBlock &block) = 0;
+
+    void freeAllMemBlocks();
+
+    static MemoryBlock createMemoryBlock(uaddr hostBase, uaddr virtualBase, usize size, bool readOnly) {
         MemoryBlock b;
-        b.m_VirtualBase = vaddr;
-        return m_MemBlocks.find(b);
+        b.m_HostBase = hostBase;
+        b.m_VirtualBase = virtualBase;
+        b.m_Size = size;
+        b.m_ReadOnly = readOnly;
+        return b;
     }
-    */
-
-    virtual uaddr hostAlloc(usize size) = 0;
-    virtual void hostFree(uaddr addr) = 0;
 
 public:
+    Allocator();
+    ~Allocator();
+
     virtual usize usedMemory() const = 0;
     virtual usize availableMemory() const = 0;
     virtual usize maxMemory() const = 0;
 
-    void reset();
+    virtual void reset();
+    virtual const MemoryBlock *blockFromVAddr(uaddr vaddr) const;
 
-    /*
-    MemoryBlock *blockFromVAddr(uaddr vaddr) const {
-        auto it = find(vaddr);
-        return it != m_MemBlocks.end() ? const_cast<MemoryBlock *>(&*it) : nullptr;
+    virtual std::expected<uaddr, Error> allocate(usize size, bool readOnly = false);
+    virtual std::optional<Error> free(uaddr vbase);
+};
+
+class GenericAllocator : public Allocator {
+    usize m_AddrSize = 0u;
+    usize m_UsedMemory = 0u;
+
+    bool hostAlloc(MemoryBlock &block) override;
+    void hostFree(MemoryBlock &block) override;
+
+public:
+    GenericAllocator(usize addressSize) : m_AddrSize(addressSize) {}
+
+    usize usedMemory() const override {
+        return m_UsedMemory;
     }
-    */
 
-    // TODO
-    uaddr allocate(uaddr hint, usize size, bool readOnly) {
-        return hostAlloc(size);
+    usize availableMemory() const override {
+        return maxMemory() - usedMemory();
     }
 
-    bool free(uaddr vbase) {
-        hostFree(vbase);
-        return true;
+    usize maxMemory() const override {
+        return static_cast<usize>(1) << m_AddrSize;
     }
+};
 
-    uaddr resize(uaddr vbase, usize newSize) { return 0u; }
+class GenericAllocator32 final : public GenericAllocator {
+public:
+    GenericAllocator32() : GenericAllocator(32u) {}
+};
+
+class GenericAllocator64 final : public GenericAllocator {
+public:
+    GenericAllocator64() : GenericAllocator(64u) {}
 };
 
 } // namespace dashle::memory

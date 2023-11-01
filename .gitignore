@@ -1,3 +1,4 @@
 .vscode
 build
 app
+libcocos2dcpp.so.idb

@@ -3,10 +3,39 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <cstdlib>
+#include <string>
 #include <filesystem>
 
-// TODO
-#define DASHLE_ASSERT(x)
+#define DASHLE_AS_STRING_IMPL(x) #x
+#define DASHLE_AS_STRING(x) DASHLE_AS_STRING_IMPL(x)
+
+#define DASHLE_LOG(s) ::dashle::logString(s)
+
+#if defined(NDEBUG)
+
+#define DASHLE_ASSERT(cond) (cond)
+#define DASHLE_UNREACHABLE(msg) ::std::abort()
+
+#else
+
+#define DASHLE_ASSERT(cond)                                              \
+    do {                                                                 \
+        if (!(cond)) {                                                   \
+            ::dashle::logString("Assertion failed: " #cond);             \
+            ::dashle::logString("In file: " __FILE__);                   \
+            ::dashle::logString("On line: " DASHLE_AS_STRING(__LINE__)); \
+            ::std::abort();                                              \
+        }                                                                \
+    } while (false);
+
+#define DASHLE_UNREACHABLE(msg)   \
+    do {                          \
+        ::dashle::logString(msg); \
+        ::std::abort();           \
+    } while (false)
+
+#endif // NDEBUG
 
 namespace stdfs = std::filesystem;
 
@@ -24,6 +53,8 @@ constexpr static auto IS_64_BIT = sizeof(uaddr) == 8;
 constexpr usize alignSize(usize size, usize align) {
     return (size + (align - 1)) & ~(align - 1);
 }
+
+void logString(const std::string &s);
 
 } // namespace dashle
 

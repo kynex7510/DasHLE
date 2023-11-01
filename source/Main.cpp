@@ -7,30 +7,6 @@
 
 using namespace dashle;
 
-class MyAllocator final : public memory::Allocator {
-    std::size_t m_UsedMem = 0;
-
-    std::uintptr_t hostAlloc(std::size_t size) {
-        auto p = m_UsedMem;
-        m_UsedMem += size;
-        return p;
-    }
-
-    virtual void hostFree(std::uintptr_t addr) {}
-
-    std::size_t usedMemory() const {
-        return m_UsedMem;
-    }
-
-    virtual std::size_t availableMemory() const override {
-        return maxMemory() - usedMemory();
-    }
-
-    std::size_t maxMemory() const override {
-        return 0xFFFFFFFF + 1;
-    }
-};
-
 class MyBinary final : public binary::Binary {
     bool fixDataRelocation() override { return true; }
     bool fixCodeRelocation() override { return true; }
@@ -126,9 +102,43 @@ public:
 };
 
 int main() {
-    MyAllocator allocator;
+    memory::GenericAllocator32 allocator;
+    allocator.reset();
+
+    usize numAllocs = 0;
+    srand(time(nullptr));
+    std::cout << std::hex;
+
+    while (true) {
+        auto const size = (rand() % 0x1000000) + 1;
+        std::cout << ++numAllocs << ") Allocating " << size << " bytes... ";
+        auto p = allocator.allocate(size, false);
+        if (!p) {
+            std::cout << "failed (" << (u32)p.error() << ")\n";
+            std::cout << "Total allocated bytes: " << allocator.usedMemory() << '\n';
+            std::cout << std::format("{}% memory used\n", ((double)allocator.usedMemory() / allocator.maxMemory()) * 100);
+            break;
+        }
+
+        std::cout << "success: " << p.value() << "\n";
+
+        if (rand() & 1) {
+            std::cout << "- Freeing... ";
+            auto o = allocator.free(p.value());
+            if (o) {
+                std::cout << "failed (" << (u32)o.value() << ")\n";
+                break;
+            }
+
+            std::cout << "success\n";
+        }
+        // allocator.debug();
+    }
+
+    /*
+    allocator.reset();
     MyEnvironment env(allocator);
-    if (!env.setup("/home/user/Documents/repos/gdacl/app/lib/armeabi-v7a/libcocos2dcpp.so"))
+    if (!env.setup("/home/user/Documents/repos/DasHLE/app/lib/armeabi-v7a/libcocos2dcpp.so"))
         return 1;
 
     std::uint8_t stack[0x1000];
@@ -144,6 +154,7 @@ int main() {
     auto reason = cpu.Run();
     std::cout << "Reason: " << (u32)reason << '\n';
     printf("R0: %u\n", cpu.Regs()[0]);
+    */
 
     return 0;
 }

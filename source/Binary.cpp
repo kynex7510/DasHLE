@@ -60,33 +60,27 @@ Error Binary::loaderImpl(const std::span<const u8> buffer) {
         return Error::InvalidSegments;
 
     // Allocate memory and map segments.
-    auto p = m_Allocator.allocate(0u, regionSize, false);
+    auto p = m_Allocator.allocate(regionSize, false);
     if (!p)
         return Error::NoMemory;
 
-    /*
-    if (auto block = mman.blockFromVAddr(p)) {
-        p = block->virtualToHost(p);
+    uaddr base = 0;
+    if (auto block = m_Allocator.blockFromVAddr(p.value())) {
+        base = block->virtualToHost(p.value());
     }
-
-    if (!p) {
-        m_Allocator.free(p);
-        return Error::NoMemory;
-    }
-    */
 
     for (auto const segment : loadSegments) {
         std::copy(
             buffer.data() + segment->p_offset,
             buffer.data() + segment->p_offset + segment->p_filesz,
-            reinterpret_cast<u8 *>(p) + segment->p_vaddr);
+            reinterpret_cast<u8 *>(base) + segment->p_vaddr);
     }
 
     // Apply relocations.
     // TODO
 
     m_Type = CFG::BINARY_TYPE;
-    m_CodeBuffer = std::span{reinterpret_cast<u8 *>(p), regionSize};
+    m_CodeBuffer = std::span{reinterpret_cast<u8 *>(base), regionSize};
     return Error::Success;
 }
 

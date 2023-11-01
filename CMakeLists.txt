@@ -2,10 +2,10 @@ cmake_minimum_required(VERSION 3.27)
 
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED on)
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED on)
 
-project(GDACL)
+project(DasHLE)
 
 # Dependencies setup
 
@@ -21,11 +21,12 @@ include_directories(include)
 
 # Project
 
-set(GDACL_SOURCES
+set(DasHLE_SOURCES
     ./source/Binary.cpp
     ./source/Main.cpp
+    ./source/Memory.cpp
 )
 
-add_executable(GDACL ${GDACL_SOURCES})
-add_dependencies(GDACL dynarmic)
-target_link_libraries(GDACL dynarmic)
+add_executable(DasHLE ${DasHLE_SOURCES})
+add_dependencies(DasHLE dynarmic)
+target_link_libraries(DasHLE dynarmic)
