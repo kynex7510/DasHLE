@@ -1,9 +1,10 @@
-#ifndef _DASHLE_ELF_H
-#define _DASHLE_ELF_H
+#ifndef _DASHLE_INTERNAL_ELF_H
+#define _DASHLE_INTERNAL_ELF_H
+
+#include "DasHLE.h"
 
 #include <elf.h>
 
-#include <cstdint>
 #include <span>
 #include <vector>
 
@@ -11,7 +12,6 @@
 
 namespace dashle::elf {
 
-// clang-format off
 template <typename T>
 concept HeaderType = std::same_as<T, Elf32_Ehdr> || std::same_as<T, Elf64_Ehdr>;
 
@@ -43,10 +43,9 @@ concept ConfigType = HeaderType<typename T::HeaderType> &&
     { T::OBJECT_CLASS } -> std::convertible_to<typename T::WordType>;
     { T::DATA_ENCODING } -> std::convertible_to<typename T::WordType>;
 };
-// clang-format on
 
 template <ConfigType CFG>
-using Segments = std::vector<const typename CFG::ProgramHeaderType *>;
+using Segments = std::vector<const typename CFG::ProgramHeaderType*>;
 
 struct Config32 {
     using HeaderType = Elf32_Ehdr;
@@ -76,16 +75,16 @@ struct ConfigBE {
     static constexpr auto DATA_ENCODING = ELFDATA2MSB;
 };
 
-constexpr inline std::size_t detectArch(const std::span<const std::uint8_t> buffer) {
+constexpr inline usize detectArch(const std::span<const u8> buffer) {
     if (buffer.size_bytes() >= sizeof(Elf32_Ehdr))
-        return reinterpret_cast<const Elf32_Ehdr *>(buffer.data())->e_machine;
+        return reinterpret_cast<const Elf32_Ehdr*>(buffer.data())->e_machine;
 
     return EM_NUM;
 }
 
 template <ConfigType CFG>
-const CFG::HeaderType *getHeader(const std::span<const std::uint8_t> buffer) {
-    auto header = reinterpret_cast<const CFG::HeaderType *>(buffer.data());
+const CFG::HeaderType* getHeader(const std::span<const u8> buffer) {
+    auto header = reinterpret_cast<const CFG::HeaderType*>(buffer.data());
 
     // Check size.
     if (buffer.size() < sizeof(typename CFG::HeaderType) || buffer.size() < header->e_ehsize)
@@ -115,17 +114,17 @@ const CFG::HeaderType *getHeader(const std::span<const std::uint8_t> buffer) {
 }
 
 template <ConfigType CFG>
-const CFG::ProgramHeaderType *getProgramHeader(const typename CFG::HeaderType *header) {
+const CFG::ProgramHeaderType* getProgramHeader(const typename CFG::HeaderType* header) {
     if (header && header->e_phnum) {
-        const auto base = reinterpret_cast<std::uintptr_t>(header);
-        return reinterpret_cast<CFG::ProgramHeaderType *>(base + header->e_phoff);
+        const auto base = reinterpret_cast<uaddr>(header);
+        return reinterpret_cast<CFG::ProgramHeaderType*>(base + header->e_phoff);
     }
 
     return nullptr;
 }
 
 template <ConfigType CFG>
-Segments<CFG> getSegments(const typename CFG::HeaderType *header,
+Segments<CFG> getSegments(const typename CFG::HeaderType* header,
                           const typename CFG::WordType type) {
     Segments<CFG> buffer;
     const auto ph = getProgramHeader<CFG>(header);
@@ -142,4 +141,4 @@ Segments<CFG> getSegments(const typename CFG::HeaderType *header,
 
 } // namespace dashle::elf
 
-#endif /* _DASHLE_ELF_H */
+#endif /* _DASHLE_INTERNAL_ELF_H */

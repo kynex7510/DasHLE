@@ -6,11 +6,13 @@
 #include <cstdlib>
 #include <string>
 #include <filesystem>
+#include <expected>
+#include <optional>
 
 #define DASHLE_AS_STRING_IMPL(x) #x
 #define DASHLE_AS_STRING(x) DASHLE_AS_STRING_IMPL(x)
 
-#define DASHLE_LOG(s) ::dashle::logString(s)
+#define DASHLE_LOG(s) ::dashle::logLine(s)
 
 #if defined(NDEBUG)
 
@@ -19,20 +21,20 @@
 
 #else
 
-#define DASHLE_ASSERT(cond)                                              \
-    do {                                                                 \
-        if (!(cond)) {                                                   \
-            ::dashle::logString("Assertion failed: " #cond);             \
-            ::dashle::logString("In file: " __FILE__);                   \
-            ::dashle::logString("On line: " DASHLE_AS_STRING(__LINE__)); \
-            ::std::abort();                                              \
-        }                                                                \
+#define DASHLE_ASSERT(cond)                                     \
+    do {                                                        \
+        if (!(cond)) {                                          \
+            DASHLE_LOG("Assertion failed: " #cond);             \
+            DASHLE_LOG("In file: " __FILE__);                   \
+            DASHLE_LOG("On line: " DASHLE_AS_STRING(__LINE__)); \
+            ::std::abort();                                     \
+        }                                                       \
     } while (false);
 
-#define DASHLE_UNREACHABLE(msg)   \
-    do {                          \
-        ::dashle::logString(msg); \
-        ::std::abort();           \
+#define DASHLE_UNREACHABLE(msg) \
+    do {                        \
+        ::dashle::logLine(msg); \
+        ::std::abort();         \
     } while (false)
 
 #endif // NDEBUG
@@ -48,13 +50,35 @@ using u64 = std::uint64_t;
 using usize = std::size_t;
 using uaddr = std::uintptr_t;
 
-constexpr static auto IS_64_BIT = sizeof(uaddr) == 8;
+enum class Error {
+    OpenFailed,
+    UnknownArch,
+    InvalidObject,
+    NoSegments,
+    InvalidSegments,
+    NoMemory,
+    RelocationFailed,
+    InvalidSize,
+    InvalidAddress,
+    NoVirtualMemory,
+    NoHostMemory,
+    NoMemoryBlock,
+};
+
+template <typename T>
+using Expected = std::expected<T, Error>;
+
+using Unexpected = std::unexpected<Error>;
+using Optional = std::optional<Error>;
+
+constexpr static auto OPTIONAL_SUCCESS = Optional();
 
 constexpr usize alignSize(usize size, usize align) {
     return (size + (align - 1)) & ~(align - 1);
 }
 
-void logString(const std::string &s);
+void logLine(const std::string& s);
+std::string errorAsString(Error error);
 
 } // namespace dashle
 

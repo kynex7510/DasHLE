@@ -1,6 +1,0 @@
-BasedOnStyle: LLVM
-AccessModifierOffset: -4
-ColumnLimit: 0
-EmptyLineBeforeAccessModifier: Always
-IndentWidth: 4
-SortIncludes: Never

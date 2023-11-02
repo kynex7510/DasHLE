@@ -1,20 +1,11 @@
 #ifndef _DASHLE_MEMORY_H
 #define _DASHLE_MEMORY_H
 
-#include "Base.h"
+#include "dashle/Base.h"
 
 #include <memory>
-#include <expected>
-#include <optional>
 
 namespace dashle::memory {
-
-enum class Error {
-    InvalidSize,
-    NoVirtualMemory,
-    NoHostMemory,
-    NoMemoryBlock,
-};
 
 /*
     Represents a memory range which has been allocated for target use.
@@ -42,7 +33,7 @@ public:
     void setSize(usize size) { m_Size = size; }
     void setReadOnly(bool readOnly) { m_ReadOnly = readOnly; }
 
-    uaddr virtualToHost(uaddr vaddr) const;
+    Expected<uaddr> virtualToHost(uaddr vaddr) const;
 
     // Read from host buffer.
     bool read(uaddr hfrom, uaddr vto, usize size) const;
@@ -67,12 +58,13 @@ struct AllocatorData;
 class Allocator {
 private:
     std::unique_ptr<AllocatorData> m_Data;
+    usize m_MaxMemory;
 
-    // These functions are responsible for updating the block and the memory counter.
-    virtual bool hostAlloc(MemoryBlock &block) = 0;
-    virtual void hostFree(MemoryBlock &block) = 0;
+    // These functions are responsible for updating memory blocks and the memory counter.
+    virtual bool hostAlloc(MemoryBlock& block) = 0;
+    virtual void hostFree(MemoryBlock& block) = 0;
 
-    void freeAllMemBlocks();
+    void initialize();
 
     static MemoryBlock createMemoryBlock(uaddr hostBase, uaddr virtualBase, usize size, bool readOnly) {
         MemoryBlock b;
@@ -83,30 +75,38 @@ private:
         return b;
     }
 
-public:
-    Allocator();
+protected:
+    Allocator(usize maxMemory);
     ~Allocator();
 
+public:
+    usize maxMemory() const { return m_MaxMemory; }
     virtual usize usedMemory() const = 0;
     virtual usize availableMemory() const = 0;
-    virtual usize maxMemory() const = 0;
 
+    // Must be explicitly called to avoid memory leaks.
+    void deleteAllMemBlocks();
+    
+    // Delete all memory blocks and reset allocator state.
     virtual void reset();
-    virtual const MemoryBlock *blockFromVAddr(uaddr vaddr) const;
 
-    virtual std::expected<uaddr, Error> allocate(usize size, bool readOnly = false);
-    virtual std::optional<Error> free(uaddr vbase);
+    const MemoryBlock* blockFromVAddr(uaddr vaddr) const;
+
+    virtual Expected<uaddr> allocate(usize size, bool readOnly = false);
+    virtual Optional free(uaddr vbase);
 };
 
-class GenericAllocator : public Allocator {
-    usize m_AddrSize = 0u;
+/*
+    Generic allocator, defaults to malloc() and free().
+*/
+class GenericAllocator final : public Allocator {
     usize m_UsedMemory = 0u;
 
-    bool hostAlloc(MemoryBlock &block) override;
-    void hostFree(MemoryBlock &block) override;
+    bool hostAlloc(MemoryBlock& block) override;
+    void hostFree(MemoryBlock& block) override;
 
 public:
-    GenericAllocator(usize addressSize) : m_AddrSize(addressSize) {}
+    GenericAllocator(usize maxMemory) : Allocator(maxMemory) {}
 
     usize usedMemory() const override {
         return m_UsedMemory;
@@ -115,20 +115,6 @@ public:
     usize availableMemory() const override {
         return maxMemory() - usedMemory();
     }
-
-    usize maxMemory() const override {
-        return static_cast<usize>(1) << m_AddrSize;
-    }
-};
-
-class GenericAllocator32 final : public GenericAllocator {
-public:
-    GenericAllocator32() : GenericAllocator(32u) {}
-};
-
-class GenericAllocator64 final : public GenericAllocator {
-public:
-    GenericAllocator64() : GenericAllocator(64u) {}
 };
 
 } // namespace dashle::memory

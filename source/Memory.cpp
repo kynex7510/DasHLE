@@ -1,29 +1,32 @@
 #include "DasHLE.h"
 
 #include <set>
-#include <cstring>
+#include <algorithm>
 #include <iterator>
+#include <cstdlib>
 
 using namespace dashle;
 using namespace dashle::memory;
 
 static void copyBytes(uaddr from, uaddr to, usize size) {
-    std::memcpy(reinterpret_cast<void *>(to), reinterpret_cast<const void *>(from), size);
+    std::copy(reinterpret_cast<u8*>(from), 
+        reinterpret_cast<u8*>(from) + size,
+        reinterpret_cast<u8*>(to));
 }
 
 // MemoryBlock
 
-uaddr MemoryBlock::virtualToHost(uaddr vaddr) const {
+Expected<uaddr> MemoryBlock::virtualToHost(uaddr vaddr) const {
     const auto vbase = virtualBase();
     if (vaddr >= vbase && vaddr <= (vbase + size()))
         return vaddr - vbase + hostBase();
 
-    return 0u;
+    return std::unexpected(Error::InvalidAddress);
 }
 
 bool MemoryBlock::read(uaddr hfrom, uaddr vto, usize size) const {
     if (auto haddr = virtualToHost(vto)) {
-        copyBytes(hfrom, hfrom + size, haddr);
+        copyBytes(hfrom, hfrom + size, haddr.value());
         return true;
     }
 
@@ -31,8 +34,8 @@ bool MemoryBlock::read(uaddr hfrom, uaddr vto, usize size) const {
 }
 
 bool MemoryBlock::write(uaddr vfrom, uaddr hto, usize size) const {
-    if (auto haddr = virtualToHost(vfrom)) {
-        copyBytes(haddr, haddr + size, hto);
+    if (auto haddr = virtualToHost(vfrom); haddr && !readOnly()) {
+        copyBytes(haddr.value(), haddr.value() + size, hto);
         return true;
     }
 
@@ -42,32 +45,32 @@ bool MemoryBlock::write(uaddr vfrom, uaddr hto, usize size) const {
 u8 MemoryBlock::read8(uaddr addr) const {
     auto haddr = virtualToHost(addr);
     DASHLE_ASSERT(haddr);
-    return *reinterpret_cast<u8 *>(haddr);
+    return *reinterpret_cast<u8*>(haddr.value());
 }
 
 u16 MemoryBlock::read16(uaddr addr) const {
     auto haddr = virtualToHost(addr);
     DASHLE_ASSERT(haddr);
-    return *reinterpret_cast<u16 *>(haddr);
+    return *reinterpret_cast<u16*>(haddr.value());
 }
 
 u32 MemoryBlock::read32(uaddr addr) const {
     auto haddr = virtualToHost(addr);
     DASHLE_ASSERT(haddr);
-    return *reinterpret_cast<u32 *>(haddr);
+    return *reinterpret_cast<u32*>(haddr.value());
 }
 
 u64 MemoryBlock::read64(uaddr addr) const {
     auto haddr = virtualToHost(addr);
     DASHLE_ASSERT(haddr);
-    return *reinterpret_cast<u64 *>(haddr);
+    return *reinterpret_cast<u64*>(haddr.value());
 }
 
 bool MemoryBlock::write8(uaddr addr, u8 value) const {
     if (!readOnly()) {
         auto haddr = virtualToHost(addr);
         DASHLE_ASSERT(haddr);
-        *reinterpret_cast<u8 *>(haddr) = value;
+        *reinterpret_cast<u8*>(haddr.value()) = value;
         return true;
     }
 
@@ -78,7 +81,7 @@ bool MemoryBlock::write16(uaddr addr, u16 value) const {
     if (!readOnly()) {
         auto haddr = virtualToHost(addr);
         DASHLE_ASSERT(haddr);
-        *reinterpret_cast<u16 *>(haddr) = value;
+        *reinterpret_cast<u16*>(haddr.value()) = value;
         return true;
     }
 
@@ -89,7 +92,7 @@ bool MemoryBlock::write32(uaddr addr, u32 value) const {
     if (!readOnly()) {
         auto haddr = virtualToHost(addr);
         DASHLE_ASSERT(haddr);
-        *reinterpret_cast<u32 *>(haddr) = value;
+        *reinterpret_cast<u32*>(haddr.value()) = value;
         return true;
     }
 
@@ -100,7 +103,7 @@ bool MemoryBlock::write64(uaddr addr, u64 value) const {
     if (!readOnly()) {
         auto haddr = virtualToHost(addr);
         DASHLE_ASSERT(haddr);
-        *reinterpret_cast<u64 *>(haddr) = value;
+        *reinterpret_cast<u64*>(haddr.value()) = value;
         return true;
     }
 
@@ -115,7 +118,7 @@ struct FreeBlock {
 };
 
 struct MemoryBlockComparator {
-    constexpr bool operator()(const MemoryBlock &a, const MemoryBlock &b) const {
+    constexpr bool operator()(const MemoryBlock& a, const MemoryBlock& b) const {
         // When size = 0 we're comparing the block with a virtual address.
 
         if (!a.size()) {
@@ -137,7 +140,7 @@ struct MemoryBlockComparator {
 };
 
 struct FreeBlockComparator {
-    constexpr bool operator()(const FreeBlock &a, const FreeBlock &b) const {
+    constexpr bool operator()(const FreeBlock& a, const FreeBlock& b) const {
         // If the size is the same, sort by smallest virtual base.
         if (a.size == b.size)
             return a.virtualBase < b.virtualBase;
@@ -154,7 +157,20 @@ struct dashle::memory::AllocatorData {
     FreeBlockSet freeBlocks;
 };
 
-void Allocator::freeAllMemBlocks() {
+void Allocator::initialize() {
+    // Add main free block.
+    const auto pair = m_Data->freeBlocks.insert(FreeBlock{.size = maxMemory()});
+    DASHLE_ASSERT(pair.second); // Shouldn't happen.
+}
+
+Allocator::Allocator(usize maxMemory) : m_MaxMemory(maxMemory) {
+    m_Data = std::make_unique<dashle::memory::AllocatorData>();
+    initialize();
+}
+
+Allocator::~Allocator() {} // Required by the destructor of data.
+
+void Allocator::deleteAllMemBlocks() {
     auto it = m_Data->memBlocks.begin();
     while (it != m_Data->memBlocks.end()) {
         auto node = m_Data->memBlocks.extract(it);
@@ -163,38 +179,33 @@ void Allocator::freeAllMemBlocks() {
     }
 }
 
-Allocator::Allocator() { m_Data = std::make_unique<dashle::memory::AllocatorData>(); }
-Allocator::~Allocator() {}
-
 void Allocator::reset() {
-    freeAllMemBlocks();
-
-    // Add a single free block for all memory.
+    deleteAllMemBlocks();
     m_Data->freeBlocks.clear();
-    m_Data->freeBlocks.insert(FreeBlock{.size = availableMemory()});
+    initialize();
 }
 
-const MemoryBlock *Allocator::blockFromVAddr(uaddr vaddr) const {
+const MemoryBlock* Allocator::blockFromVAddr(uaddr vaddr) const {
     auto it = m_Data->memBlocks.find(createMemoryBlock(0u, vaddr, 0u, false));
     return it != m_Data->memBlocks.end() ? &*it : nullptr;
 }
 
-std::expected<uaddr, Error> Allocator::allocate(usize size, bool readOnly) {
+Expected<uaddr> Allocator::allocate(usize size, bool readOnly) {
     if (!size)
-        return std::unexpected(Error::InvalidSize);
+        return Unexpected(Error::InvalidSize);
 
     if (availableMemory() < size)
-        return std::unexpected(Error::NoVirtualMemory);
+        return Unexpected(Error::NoVirtualMemory);
 
     // Find the smallest block that can hold size bytes (best-fit).
     // This is optimized for small allocations.
     auto it = m_Data->freeBlocks.lower_bound(FreeBlock({.size = size}));
     if (it == m_Data->freeBlocks.end())
-        return std::unexpected(Error::NoVirtualMemory);
+        return Unexpected(Error::NoVirtualMemory);
 
     // Create memory block.
     auto freeBlockNode = m_Data->freeBlocks.extract(it);
-    auto &freeBlock = freeBlockNode.value();
+    auto& freeBlock = freeBlockNode.value();
     auto memBlock = createMemoryBlock(0u, freeBlock.virtualBase, size, readOnly);
     if (!hostAlloc(memBlock)) {
         m_Data->freeBlocks.insert(std::move(freeBlockNode));
@@ -212,7 +223,7 @@ std::expected<uaddr, Error> Allocator::allocate(usize size, bool readOnly) {
     return memBlock.virtualBase();
 }
 
-std::optional<Error> Allocator::free(uaddr vbase) {
+Optional Allocator::free(uaddr vbase) {
     // Find memory block.
     auto it = m_Data->memBlocks.find(createMemoryBlock(0u, vbase, 0u, false));
     if (it == m_Data->memBlocks.end() || it->virtualBase() != vbase)
@@ -223,7 +234,7 @@ std::optional<Error> Allocator::free(uaddr vbase) {
         .virtualBase = it->virtualBase(),
         .size = it->size()};
 
-    const auto handleBlock = [&](AllocatorData *data, const FreeBlock &block, bool next) {
+    const auto handleBlock = [&](AllocatorData* data, const FreeBlock& block, bool next) {
         const auto freeBlockIt = data->freeBlocks.find(block);
         DASHLE_ASSERT(freeBlockIt != data->freeBlocks.end()); // Shouldn't happen.
         // Update new free block.
@@ -284,12 +295,12 @@ std::optional<Error> Allocator::free(uaddr vbase) {
     auto node = m_Data->memBlocks.extract(it);
     hostFree(node.value());
     m_Data->freeBlocks.insert(newFreeBlock);
-    return {};
+    return OPTIONAL_SUCCESS;
 }
 
 // GenericAllocator
 
-bool GenericAllocator::hostAlloc(MemoryBlock &block) {
+bool GenericAllocator::hostAlloc(MemoryBlock& block) {
     if (auto addr = std::malloc(block.size())) {
         block.setHostBase(reinterpret_cast<uaddr>(addr));
         m_UsedMemory += block.size();
@@ -299,8 +310,8 @@ bool GenericAllocator::hostAlloc(MemoryBlock &block) {
     return false;
 }
 
-void GenericAllocator::hostFree(MemoryBlock &block) {
-    std::free(reinterpret_cast<void *>(block.hostBase()));
+void GenericAllocator::hostFree(MemoryBlock& block) {
+    std::free(reinterpret_cast<void*>(block.hostBase()));
     block.setHostBase(0u);
     m_UsedMemory -= block.size();
 }
