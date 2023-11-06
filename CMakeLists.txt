@@ -17,16 +17,18 @@ add_subdirectory(external/dynarmic)
 
 include_directories(external/dynarmic/src)
 include_directories(external/boost)
-include_directories(include)
 
 # Project
 
+include_directories(source)
+
 set(DasHLE_SOURCES
-    ./source/Binary.cpp
-    ./source/Main.cpp
-    ./source/Memory.cpp
+    ${CMAKE_SOURCE_DIR}/source/Base.cpp
+    ${CMAKE_SOURCE_DIR}/source/Memory.cpp
 )
 
-add_executable(DasHLE ${DasHLE_SOURCES})
+add_subdirectory(tests)
+
+add_executable(DasHLE ${DasHLE_SOURCES} ${CMAKE_SOURCE_DIR}/source/Main.cpp)
 add_dependencies(DasHLE dynarmic)
 target_link_libraries(DasHLE dynarmic)

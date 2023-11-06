@@ -173,7 +173,7 @@ Expected<uaddr> MemoryManager::allocate(uaddr hint, usize size, usize flags) {
             auto allocatedBlock = AllocatedBlock {
                 .virtualBase = hint,
                 .size = size,
-                .flags = flags};
+                .flags = flags & FLAG_MASK};
 
             if (!hostAlloc(allocatedBlock)) {
                 freeBlocks.insert(std::move(freeBlockNode));
@@ -213,7 +213,7 @@ Expected<uaddr> MemoryManager::allocate(uaddr hint, usize size, usize flags) {
     auto allocatedBlock = AllocatedBlock {
         .virtualBase = freeBlock.virtualBase,
         .size = size,
-        .flags = flags};
+        .flags = flags & FLAG_MASK};
 
     if (!hostAlloc(allocatedBlock)) {
         freeBlocks.insert(std::move(freeBlockNode));
@@ -308,14 +308,14 @@ Expected<void> MemoryManager::free(uaddr vbase) {
     hostFree(node.value());
     m_UsedMemory -= node.value().size;
     freeBlocks.insert(newFreeBlock);
-    return;
+    return EXPECTED_VOID;
 }
 
 Expected<void> MemoryManager::setFlags(uaddr vbase, usize flags) {
     return blockFromVAddr(vbase).and_then([vbase, flags](const AllocatedBlock* block) -> Expected<void> {
         if (block->virtualBase == vbase) {
             const_cast<AllocatedBlock*>(block)->flags = flags;
-            return;
+            return EXPECTED_VOID;
         }
 
         return Unexpected(Error::InvalidAddress);

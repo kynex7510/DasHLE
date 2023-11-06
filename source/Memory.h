@@ -35,14 +35,14 @@ private:
     bool hostAlloc(AllocatedBlock& block);
     void hostFree(AllocatedBlock& block);
 
-protected:
+public:
+    constexpr static usize FLAG_READ  = 0b001;
+    constexpr static usize FLAG_WRITE = 0b010;
+    constexpr static usize FLAG_EXEC  = 0b100;
+    constexpr static usize FLAG_MASK  = 0b111;
+
     MemoryManager(std::unique_ptr<HostAllocator> allocator, usize maxMemory, usize offset = 0u);
     ~MemoryManager();
-
-public:
-    constexpr static usize PROT_READ  = 0b001;
-    constexpr static usize PROT_WRITE = 0b010;
-    constexpr static usize PROT_EXEC  = 0b100;
 
     usize maxMemory() const { return m_MaxMemory; }
     usize usedMemory() const { return m_UsedMemory; }
@@ -61,7 +61,7 @@ public:
     // Allocate memory, return the virtual address.
     Expected<uaddr> allocate(uaddr hint, usize size, usize flags);
 
-    Expected<uaddr> allocate(usize size, usize flags = PROT_READ | PROT_WRITE) {
+    Expected<uaddr> allocate(usize size, usize flags = FLAG_READ | FLAG_WRITE) {
         return allocate(invalidAddr(), size, flags);
     }
 
