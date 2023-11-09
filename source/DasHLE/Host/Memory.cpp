@@ -1,13 +1,12 @@
-#include "Memory.h"
+#include "DasHLE/Host/Memory.h"
 
 #include <set>
 #include <algorithm>
 #include <iterator>
 #include <cstdlib>
-#include <stdexcept>
 
 using namespace dashle;
-using namespace dashle::memory;
+using namespace dashle::host::memory;
 
 // HostAllocator
 
@@ -67,12 +66,16 @@ struct FreeBlockComparator {
 using AllocatedBlockSet = std::set<AllocatedBlock, AllocatedBlockComparator>;
 using FreeBlockSet = std::set<FreeBlock, FreeBlockComparator>;
 
-struct dashle::memory::MemoryManager::Data {
+struct dashle::host::memory::MemoryManager::Data {
     AllocatedBlockSet allocatedBlocks;
     FreeBlockSet freeBlocks;
 };
 
 void MemoryManager::initialize() {
+    // Initialize allocator.
+    DASHLE_ASSERT(m_HostAllocator);
+    DASHLE_ASSERT(m_HostAllocator->initialize());
+
     // Add main free block.
     const auto pair = m_Data->freeBlocks.insert(FreeBlock{
         .virtualBase = m_Offset,
@@ -80,7 +83,10 @@ void MemoryManager::initialize() {
     DASHLE_ASSERT(pair.second); // Shouldn't happen.
 }
 
-void MemoryManager::freeAllMemory() {
+void MemoryManager::finalize() {
+    DASHLE_ASSERT(m_Data);
+
+    // Free all allocated memory.
     auto& allocatedBlocks = m_Data->allocatedBlocks;
     auto it = allocatedBlocks.begin();
     while (it != allocatedBlocks.end()) {
@@ -88,6 +94,12 @@ void MemoryManager::freeAllMemory() {
         m_HostAllocator->free(node.value());
         it = allocatedBlocks.begin();
     }
+
+    // Remove memory blocks.
+    m_Data->freeBlocks.clear();
+
+    // Finalize allocator.
+    m_HostAllocator->finalize();
 }
 
 bool MemoryManager::hostAlloc(AllocatedBlock& block) {
@@ -97,15 +109,14 @@ bool MemoryManager::hostAlloc(AllocatedBlock& block) {
     const auto originalSize = block.size;
     const auto originalFlags = block.flags;
 
-    if (m_HostAllocator->alloc(block)) {
-        // Allocators shall not modify block values.
-        DASHLE_ASSERT(block.virtualBase == originalVBase);
-        DASHLE_ASSERT(block.size == originalSize);
-        DASHLE_ASSERT(block.flags == originalFlags);
-        return true;
-    }
+    bool ret = m_HostAllocator->alloc(block);
 
-    return false;
+    // Allocators shall not modify block values.
+    DASHLE_ASSERT(block.virtualBase == originalVBase);
+    DASHLE_ASSERT(block.size == originalSize);
+    DASHLE_ASSERT(block.flags == originalFlags);
+
+    return ret;
 }
 
 void MemoryManager::hostFree(AllocatedBlock& block) {
@@ -116,19 +127,18 @@ void MemoryManager::hostFree(AllocatedBlock& block) {
 MemoryManager::MemoryManager(std::unique_ptr<HostAllocator> hostAllocator, usize maxMemory, uaddr offset)
     : m_HostAllocator(std::move(hostAllocator)), m_MaxMemory(maxMemory), m_Offset(offset) {
     if (invalidAddr() > virtualOffset()) {
-        m_Data = std::make_unique<dashle::memory::MemoryManager::Data>();
+        m_Data = std::make_unique<dashle::host::memory::MemoryManager::Data>();
         initialize();
         return;
     }
 
-    DASHLE_UNREACHABLE("Wrap around detected!");
+    DASHLE_UNREACHABLE("Wrap around detected (maxMemory={}, offset={})", maxMemory, offset);
 }
 
-MemoryManager::~MemoryManager() { freeAllMemory(); }
+MemoryManager::~MemoryManager() { finalize(); }
 
 void MemoryManager::reset() {
-    freeAllMemory();
-    m_Data->freeBlocks.clear();
+    finalize();
     initialize();
 }
 
@@ -173,7 +183,7 @@ Expected<uaddr> MemoryManager::allocate(uaddr hint, usize size, usize flags) {
             auto allocatedBlock = AllocatedBlock {
                 .virtualBase = hint,
                 .size = size,
-                .flags = flags & FLAG_MASK};
+                .flags = flags & flags::MASK};
 
             if (!hostAlloc(allocatedBlock)) {
                 freeBlocks.insert(std::move(freeBlockNode));
@@ -213,7 +223,7 @@ Expected<uaddr> MemoryManager::allocate(uaddr hint, usize size, usize flags) {
     auto allocatedBlock = AllocatedBlock {
         .virtualBase = freeBlock.virtualBase,
         .size = size,
-        .flags = flags & FLAG_MASK};
+        .flags = flags & flags::MASK};
 
     if (!hostAlloc(allocatedBlock)) {
         freeBlocks.insert(std::move(freeBlockNode));
