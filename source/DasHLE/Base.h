@@ -36,6 +36,40 @@
 
 #endif // NDEBUG
 
+#define DASHLE_TRY_EXPECTED(name, expr)             \
+    auto name##Wrapper = (expr);                    \
+    if (!(name##Wrapper))                           \
+        return Unexpected((name##Wrapper).error()); \
+    auto name = name##Wrapper.value()
+
+#define DASHLE_TRY_EXPECTED_CONST(name, expr)       \
+    const auto name##Wrapper = (expr);              \
+    if (!(name##Wrapper))                           \
+        return Unexpected((name##Wrapper).error()); \
+    const auto name = name##Wrapper.value()
+
+#define DASHLE_TRY_OPTIONAL(name, expr, error) \
+    auto name##Wrapper = (expr);               \
+    if (!(name##Wrapper))                      \
+        return Unexpected((error));            \
+    auto name = name##Wrapper.value()
+
+#define DASHLE_TRY_OPTIONAL_CONST(name, expr, error) \
+    const auto name##Wrapper = (expr);               \
+    if (!(name##Wrapper))                            \
+        return Unexpected((error));                  \
+    const auto name = name##Wrapper.value()
+
+#define DASHLE_ASSERT_WRAPPER(name, expr) \
+    auto name##Wrapper = (expr);          \
+    DASHLE_ASSERT(name##Wrapper);         \
+    auto name = name##Wrapper.value()
+
+#define DASHLE_ASSERT_WRAPPER_CONST(name, expr)    \
+    const auto name##Wrapper = (expr);             \
+    DASHLE_ASSERT(name##Wrapper);                  \
+    const auto name = name##Wrapper.value()
+
 namespace dashle {
 
 using s8 = std::int8_t;
@@ -51,13 +85,16 @@ using uaddr = std::uintptr_t;
 
 enum class Error {
     OpenFailed,
-    InvalidArch,
-    InvalidObject,
-    NoSegments,
-    InvalidSegments,
-    NoMemory,
-    RelocationFailed,
     InvalidSize,
+    InvalidMagic,
+    InvalidClass,
+    InvalidDataEncoding,
+    NoPIE,
+    InvalidArch,
+    NoSegments,
+    NoSections,
+    InvalidSegment,
+    RelocationFailed,
     InvalidAddress,
     NoVirtualMemory,
     NoHostMemory,

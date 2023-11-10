@@ -16,17 +16,17 @@ dynarmic32::UserConfig EmuContext::buildConfig() const {
     dynarmic32::UserConfig cfg;
     cfg.callbacks = m_Env.get();
 
-    DASHLE_ASSERT(m_Env->binaryType());
-    const auto binaryType = m_Env->binaryType().value();
-    switch (binaryType) {
-        case BinaryType::Armeabi:
+    DASHLE_ASSERT_WRAPPER_CONST(binaryVersion, m_Env->binaryVersion());
+    switch (binaryVersion) {
+        case BinaryVersion::Armeabi:
             cfg.arch_version = dynarmic32::ArchVersion::v5TE;
             break;
-        case BinaryType::Armeabi_v7a:
+        case BinaryVersion::Armeabi_v7a:
             cfg.arch_version = dynarmic32::ArchVersion::v7;
             break;
         default:
-            DASHLE_UNREACHABLE("Unknown binary type (type={})", static_cast<u32>(binaryType));
+            // TODO: formatter
+            DASHLE_UNREACHABLE("Unknown binary type (type={})", static_cast<u32>(binaryVersion));
     }
 
     if constexpr(DEBUG_MODE)

@@ -11,13 +11,16 @@ std::string dashle::errorAsString(Error error) {
 
     switch (error) {
         ERROR_CASE(OpenFailed);
-        ERROR_CASE(InvalidArch);
-        ERROR_CASE(InvalidObject);
-        ERROR_CASE(NoSegments);
-        ERROR_CASE(InvalidSegments);
-        ERROR_CASE(NoMemory);
-        ERROR_CASE(RelocationFailed);
         ERROR_CASE(InvalidSize);
+        ERROR_CASE(InvalidMagic);
+        ERROR_CASE(InvalidClass);
+        ERROR_CASE(InvalidDataEncoding);
+        ERROR_CASE(NoPIE);
+        ERROR_CASE(InvalidArch);
+        ERROR_CASE(NoSegments);
+        ERROR_CASE(NoSections);
+        ERROR_CASE(InvalidSegment);
+        ERROR_CASE(RelocationFailed);
         ERROR_CASE(InvalidAddress);
         ERROR_CASE(NoVirtualMemory);
         ERROR_CASE(NoHostMemory);

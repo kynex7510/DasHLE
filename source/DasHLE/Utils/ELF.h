@@ -5,6 +5,7 @@
 
 #include <span>
 #include <vector>
+#include <algorithm>
 
 #define ELF_ASSERT_CONFIG(cfg) static_assert(::dashle::utils::elf::ConfigType<cfg>)
 
@@ -222,117 +223,97 @@ struct ConfigBE {
     static constexpr auto DATA_ENCODING = ELFDATA2MSB;
 };
 
-constexpr Elf32_Half detectArch(const std::span<const u8> buffer) {
-    if (buffer.size_bytes() >= sizeof(Elf32_Ehdr))
-        return reinterpret_cast<const Elf32_Ehdr*>(buffer.data())->e_machine;
-
-    return EM_NONE;
-}
-
-constexpr bool isArch(const std::span<const u8> buffer, Elf32_Half arch) {
-    return detectArch(buffer) == arch;
-}
-
 template <ConfigType CFG>
-const CFG::HeaderType* getHeader(const std::span<const u8> buffer) {
+Expected<const typename CFG::HeaderType*> getHeader(const std::span<const u8> buffer) {
     auto header = reinterpret_cast<const CFG::HeaderType*>(buffer.data());
 
     // Check size.
     if (buffer.size() < sizeof(typename CFG::HeaderType) || buffer.size() < header->e_ehsize)
-        return nullptr;
+        return Unexpected(Error::InvalidSize);
 
     // Check magic.
     if (!std::equal(header->e_ident, header->e_ident + SELFMAG, ELFMAG))
-        return nullptr;
+        return Unexpected(Error::InvalidMagic);
 
     // Check class.
     if (header->e_ident[EI_CLASS] != CFG::OBJECT_CLASS)
-        return nullptr;
+        return Unexpected(Error::InvalidClass);
 
     // Check data encoding.
     if (header->e_ident[EI_DATA] != CFG::DATA_ENCODING)
-        return nullptr;
+        return Unexpected(Error::InvalidDataEncoding);
 
     // Check position indipendent binary.
     if (header->e_type != ET_DYN)
-        return nullptr;
+        return Unexpected(Error::NoPIE);
 
     // Check arch.
     if (header->e_machine != CFG::ARCH)
-        return nullptr;
+        return Unexpected(Error::InvalidArch);
 
     return header;
 }
 
 template <ConfigType CFG>
-const CFG::ProgramHeaderType* getProgramHeader(const typename CFG::HeaderType* header) {
+Optional<const typename CFG::ProgramHeaderType*> getProgramHeader(const typename CFG::HeaderType* header) {
     if (header && header->e_phnum) {
         const auto base = reinterpret_cast<uaddr>(header);
         return reinterpret_cast<CFG::ProgramHeaderType*>(base + header->e_phoff);
     }
 
-    return nullptr;
+    return {};
 }
 
 template<ConfigType CFG>
-const CFG::SectionHeaderType* getSectionHeader(const typename CFG::HeaderType* header) {
+Optional<const typename CFG::SectionHeaderType*> getSectionHeader(const typename CFG::HeaderType* header) {
     if (header && header->e_shnum) {
         const auto base = reinterpret_cast<uaddr>(header);
         return reinterpret_cast<CFG::SectionHeaderType*>(base + header->e_shoff);
     }
 
-    return nullptr;
+    return {};
 }
 
 template <ConfigType CFG>
-Segments<CFG> getSegments(const typename CFG::HeaderType* header,
+Expected<Segments<CFG>> getSegments(const typename CFG::HeaderType* header,
+                                    const typename CFG::WordType type) {
+    Segments<CFG> vec;
+    DASHLE_TRY_OPTIONAL_CONST(ph, getProgramHeader<CFG>(header), Error::NoSegments);
+
+    for (auto i = 0u; i < header->e_phnum; ++i) {
+        if (ph[i].p_type == type)
+            vec.push_back(&ph[i]);
+    }
+
+    std::sort(vec.begin(), vec.end(), [](const typename CFG::ProgramHeaderType* a, const typename CFG::ProgramHeaderType* b) {
+        return a->p_vaddr < b->p_vaddr;
+    });
+    return vec;
+}
+
+template <ConfigType CFG>
+Expected<usize> getSegmentAllocSize(const typename CFG::ProgramHeaderType* segment) {
+   if (segment->p_memsz < segment->p_filesz)
+    return Unexpected(Error::InvalidSegment);
+
+    if (segment->p_align > 1)
+        return alignSize(segment->p_memsz, segment->p_align);
+
+    return segment->p_memsz;
+}
+
+template <ConfigType CFG>
+Expected<Sections<CFG>> getSections(const typename CFG::HeaderType* header,
                           const typename CFG::WordType type) {
-    Segments<CFG> buffer;
-    const auto ph = getProgramHeader<CFG>(header);
+    Sections<CFG> vec;
+     DASHLE_TRY_OPTIONAL_CONST(sh, getSectionHeader<CFG>(header), Error::NoSections);
 
-    if (ph) {
-        for (auto i = 0u; i < header->e_phnum; ++i) {
-            if (ph[i].p_type == type)
-                buffer.push_back(&ph[i]);
-        }
+    for (auto i = 0u; i < header->e_shnum; ++i) {
+        if (sh[i].sh_type == type)
+            vec.push_back(&sh[i]);
     }
 
-    return buffer;
-}
-
-template <ConfigType CFG>
-usize getSegmentsAllocSize(const Segments<CFG>& segments) {
-    usize allocSize = 0;
-
-    for (const auto segment : segments) {
-        if (segment->p_memsz < segment->p_filesz) {
-            allocSize = 0;
-            break;
-        }
-
-        if (segment->p_align > 1)
-            allocSize += alignSize(segment->p_memsz, segment->p_align);
-        else
-            allocSize += segment->p_memsz;
-    }
-
-    return allocSize;
-}
-
-template <ConfigType CFG>
-Sections<CFG> getSections(const typename CFG::HeaderType* header,
-                          const typename CFG::WordType type) {
-    Sections<CFG> buffer;
-    const auto sh = getSectionHeader<CFG>(header);
-
-    if (sh) {
-        for (auto i = 0u; i < header->e_shnum; ++i) {
-            if (sh[i].sh_type == type)
-                buffer.push_back(&sh[i]);
-        }
-    }
-
-    return buffer;
+    return vec;
 }
 
 } // namespace dashle::utils::elf

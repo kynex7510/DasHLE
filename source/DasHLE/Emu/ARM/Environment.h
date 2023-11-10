@@ -11,16 +11,16 @@ namespace dashle::emu::arm {
 namespace dynarmic = Dynarmic;
 namespace dynarmic32 = dynarmic::A32;
 
-enum class BinaryType {
-    Armeabi,
-    Armeabi_v7a
+enum class BinaryVersion {
+    Armeabi,    // v5TE
+    Armeabi_v7a // v7
 };
 
 class Environment : public dynarmic32::UserCallbacks {
     std::unique_ptr<host::memory::MemoryManager> m_Mem;
     Optional<uaddr> m_BinaryBase;
     Optional<uaddr> m_StackBase;
-    Optional<BinaryType> m_BinaryType;
+    Optional<BinaryVersion> m_BinaryVersion;
 
     virtual Expected<uaddr> virtualToHost(uaddr vaddr) const;
 
@@ -58,7 +58,7 @@ public:
 
     Optional<uaddr> binaryBase() const { return m_BinaryBase; }
     Optional<uaddr> stackBase() const { return m_StackBase; }
-    Optional<BinaryType> binaryType() const { return m_BinaryType; }
+    Optional<BinaryVersion> binaryVersion() const { return m_BinaryVersion; }
 };
 
 class DefaultEnvironment final : public Environment {

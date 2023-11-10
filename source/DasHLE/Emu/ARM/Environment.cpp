@@ -5,6 +5,8 @@ using namespace dashle;
 using namespace dashle::utils;
 using namespace dashle::emu::arm;
 
+constexpr static usize PAGE_SIZE = 0x1000;
+
 struct ConfigARM : elf::Config32, elf::ConfigLE {
     constexpr static auto ARCH = elf::EM_ARM;
 };
@@ -105,7 +107,7 @@ void Environment::ExceptionRaised(dynarmic32::VAddr pc, dynarmic32::Exception ex
 
 Environment::Environment(std::unique_ptr<host::memory::MemoryManager> mem, usize stackSize) : m_Mem(std::move(mem)) {
     // Allocate zero page.
-    DASHLE_ASSERT(m_Mem->allocate(0u, 0x1000, 0));
+    DASHLE_ASSERT(m_Mem->allocate(0u, PAGE_SIZE, 0));
 
     // Allocate stack.
     if (stackSize) {
@@ -123,46 +125,40 @@ Expected<void> Environment::openBinary(const fs::path& path) {
 }
 
 Expected<void> Environment::loadBinary(const std::span<const u8> buffer) {
-    if (!elf::isArch(buffer, ConfigARM::ARCH))
-        return Unexpected(Error::InvalidArch);
+    // Get ELF header.
+    DASHLE_TRY_EXPECTED_CONST(header, elf::getHeader<ConfigARM>(buffer));
 
-    auto header = elf::getHeader<ConfigARM>(buffer);
-    if (!header)
-        return Unexpected(Error::InvalidObject);
+    // Detect binary version.
+    // TODO
+    m_BinaryVersion = BinaryVersion::Armeabi_v7a;
 
-    // Calculate allocation space for load segments.
-    auto loadSegments = elf::getSegments<ConfigARM>(header, elf::PT_LOAD);
-    if (loadSegments.empty())
-        return Unexpected(Error::NoSegments);
+    // Allocate and map segments.
+    DASHLE_TRY_EXPECTED_CONST(loadSegments, elf::getSegments<ConfigARM>(header, elf::PT_LOAD));
 
-    //
-    DASHLE_LOG_LINE("Number of LOAD segments: {}", loadSegments.size());
-    //
-
-    const auto regionSize = elf::getSegmentsAllocSize<ConfigARM>(loadSegments);
-    if (!regionSize)
-        return Unexpected(Error::InvalidSegments);
-
-    // Allocate memory and map segments.
-    const auto hostBase = m_Mem->allocate(regionSize)
-        .and_then([this](uaddr vbase) {
-            m_BinaryBase = vbase;
-            return virtualToHost(vbase);
-        });
-
-    if (!hostBase)
-        return Unexpected(hostBase.error());
-
+    auto hint = m_Mem->invalidAddr();
     for (const auto segment : loadSegments) {
+        DASHLE_TRY_EXPECTED_CONST(size, elf::getSegmentAllocSize<ConfigARM>(segment));
+        DASHLE_TRY_EXPECTED_CONST(virtualBase, m_Mem->allocate(hint, size, host::memory::flags::READ_WRITE | host::memory::flags::FORCE_HINT));
+        DASHLE_TRY_EXPECTED_CONST(hostBase, virtualToHost(virtualBase));
+
         std::copy(buffer.data() + segment->p_offset,
             buffer.data() + segment->p_offset + segment->p_filesz,
-            reinterpret_cast<u8*>(hostBase.value()) + segment->p_vaddr);
+            reinterpret_cast<u8*>(hostBase) + segment->p_vaddr);
+
+        if (hint == m_Mem->invalidAddr()) {
+            m_BinaryBase = virtualBase;
+            hint = virtualBase + size;
+        } else {
+            hint += size;
+        }
     }
 
     // Handle relocations.
     // TODO
 
-    m_BinaryType = BinaryType::Armeabi_v7a;
+    // Set correct protections.
+    // TODO
+
     return EXPECTED_VOID;
 }
 

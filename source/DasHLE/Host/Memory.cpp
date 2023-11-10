@@ -183,7 +183,7 @@ Expected<uaddr> MemoryManager::allocate(uaddr hint, usize size, usize flags) {
             auto allocatedBlock = AllocatedBlock {
                 .virtualBase = hint,
                 .size = size,
-                .flags = flags & flags::MASK};
+                .flags = flags & flags::PERM_MASK};
 
             if (!hostAlloc(allocatedBlock)) {
                 freeBlocks.insert(std::move(freeBlockNode));
@@ -208,6 +208,9 @@ Expected<uaddr> MemoryManager::allocate(uaddr hint, usize size, usize flags) {
             allocatedBlocks.insert(allocatedBlock);
             m_UsedMemory += allocatedBlock.size;
             return allocatedBlock.virtualBase;
+        } else if (flags & flags::FORCE_HINT) {
+            // Fail if we are explicitly asked for an address.
+            return Unexpected(Error::NoVirtualMemory);
         }
     }
 
@@ -223,7 +226,7 @@ Expected<uaddr> MemoryManager::allocate(uaddr hint, usize size, usize flags) {
     auto allocatedBlock = AllocatedBlock {
         .virtualBase = freeBlock.virtualBase,
         .size = size,
-        .flags = flags & flags::MASK};
+        .flags = flags & flags::PERM_MASK};
 
     if (!hostAlloc(allocatedBlock)) {
         freeBlocks.insert(std::move(freeBlockNode));
