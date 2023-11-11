@@ -48,6 +48,13 @@
         return Unexpected((name##Wrapper).error()); \
     const auto name = name##Wrapper.value()
 
+#define DASHLE_TRY_EXPECTED_VOID(expr)              \
+    {                                               \
+        const auto voidWrapper = (expr);            \
+        if (!voidWrapper)                           \
+            return Unexpected(voidWrapper.error()); \
+    }
+
 #define DASHLE_TRY_OPTIONAL(name, expr, error) \
     auto name##Wrapper = (expr);               \
     if (!(name##Wrapper))                      \
@@ -82,6 +89,7 @@ using u32 = std::uint32_t;
 using u64 = std::uint64_t;
 using usize = std::size_t;
 using uaddr = std::uintptr_t;
+using soff = std::ptrdiff_t;
 
 enum class Error {
     OpenFailed,
@@ -91,6 +99,7 @@ enum class Error {
     InvalidDataEncoding,
     NoPIE,
     InvalidArch,
+    InvalidRelocation,
     NoSegments,
     NoSections,
     InvalidSegment,
@@ -123,6 +132,10 @@ void logLine(const std::string& s);
 
 } // namespace dashle::_internal
 
+constexpr uaddr alignAddr(uaddr addr, usize align) {
+    return addr & ~(align - 1);
+}
+
 constexpr usize alignSize(usize size, usize align) {
     return (size + (align - 1)) & ~(align - 1);
 }
@@ -130,5 +143,16 @@ constexpr usize alignSize(usize size, usize align) {
 std::string errorAsString(Error error);
 
 } // namespace dashle
+
+template<> 
+struct std::formatter<dashle::Error> { 
+  constexpr auto parse(std::format_parse_context& ctx) { 
+    return ctx.begin(); 
+  }
+
+  auto format(dashle::Error error, std::format_context& ctx) const { 
+    return std::format_to(ctx.out(), "{}", dashle::errorAsString(error)); 
+  } 
+};
 
 #endif /* _DASHLE_BASE_H */

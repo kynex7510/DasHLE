@@ -22,9 +22,9 @@ constexpr static usize REG_R13 = 13;
 constexpr static usize REG_R14 = 14;
 constexpr static usize REG_R15 = 15;
 
-constexpr static usize REG_SP = 13;
-constexpr static usize REG_LR = 14;
-constexpr static usize REG_PC = 15;
+constexpr static usize REG_SP = REG_R13;
+constexpr static usize REG_LR = REG_R14;
+constexpr static usize REG_PC = REG_R15;
 
 class EmuContext final {
     std::unique_ptr<Environment> m_Env;

@@ -1,26 +1,12 @@
-#include "DasHLE/Utils/ELF.h"
+#include "DasHLE/Emu/ARM/ELFConfig.h"
 #include "DasHLE/Emu/ARM/Environment.h"
 
 using namespace dashle;
-using namespace dashle::utils;
 using namespace dashle::emu::arm;
 
 constexpr static usize PAGE_SIZE = 0x1000;
 
-struct ConfigARM : elf::Config32, elf::ConfigLE {
-    constexpr static auto ARCH = elf::EM_ARM;
-};
-
-ELF_ASSERT_CONFIG(ConfigARM);
-
 // Environment
-
-Expected<uaddr> Environment::virtualToHost(uaddr vaddr) const {
-    DASHLE_ASSERT(m_Mem);
-    return m_Mem->blockFromVAddr(vaddr).and_then([vaddr](const host::memory::AllocatedBlock* block) {
-        return host::memory::virtualToHost(*block, vaddr);
-    });
-}
 
 void Environment::PreCodeTranslationHook(bool isThumb, dynarmic32::VAddr pc, dynarmic32::IREmitter& ir) {
     // TODO: handle imports.
@@ -105,13 +91,25 @@ void Environment::ExceptionRaised(dynarmic32::VAddr pc, dynarmic32::Exception ex
     DASHLE_UNREACHABLE("Unimplemented exception handling (pc={}, exception={})", pc, static_cast<u32>(exception));
 }
 
-Environment::Environment(std::unique_ptr<host::memory::MemoryManager> mem, usize stackSize) : m_Mem(std::move(mem)) {
+Expected<uaddr> Environment::virtualToHost(uaddr vaddr) const {
+    DASHLE_ASSERT(m_Mem);
+    return m_Mem->blockFromVAddr(vaddr).and_then([vaddr](const host::memory::AllocatedBlock* block) {
+        return host::memory::virtualToHost(*block, vaddr);
+    });
+}
+
+Expected<uaddr> Environment::resolveSymbol(const std::string& symbolName) {
+    // TODO
+    return 0u;
+}
+
+Environment::Environment(std::unique_ptr<host::memory::MemoryManager> mem, usize stackSize) : m_Mem(std::move(mem)), m_StackSize(stackSize) {
     // Allocate zero page.
     DASHLE_ASSERT(m_Mem->allocate(0u, PAGE_SIZE, 0));
 
     // Allocate stack.
-    if (stackSize) {
-        auto ret = m_Mem->allocate(m_Mem->maxMemory() - stackSize, stackSize, host::memory::flags::READ_WRITE);
+    if (m_StackSize) {
+        auto ret = m_Mem->allocate(m_Mem->maxMemory() - m_StackSize, m_StackSize, host::memory::flags::READ_WRITE);
         DASHLE_ASSERT(ret);
         m_StackBase = ret.value();
     }
@@ -126,18 +124,18 @@ Expected<void> Environment::openBinary(const fs::path& path) {
 
 Expected<void> Environment::loadBinary(const std::span<const u8> buffer) {
     // Get ELF header.
-    DASHLE_TRY_EXPECTED_CONST(header, elf::getHeader<ConfigARM>(buffer));
+    DASHLE_TRY_EXPECTED_CONST(header, elf::getHeader(buffer));
 
     // Detect binary version.
     // TODO
     m_BinaryVersion = BinaryVersion::Armeabi_v7a;
 
     // Allocate and map segments.
-    DASHLE_TRY_EXPECTED_CONST(loadSegments, elf::getSegments<ConfigARM>(header, elf::PT_LOAD));
+    DASHLE_TRY_EXPECTED_CONST(loadSegments, elf::getSegments(header, PT_LOAD));
 
     auto hint = m_Mem->invalidAddr();
     for (const auto segment : loadSegments) {
-        DASHLE_TRY_EXPECTED_CONST(size, elf::getSegmentAllocSize<ConfigARM>(segment));
+        DASHLE_TRY_EXPECTED_CONST(size, elf::getSegmentAllocSize(segment));
         DASHLE_TRY_EXPECTED_CONST(virtualBase, m_Mem->allocate(hint, size, host::memory::flags::READ_WRITE | host::memory::flags::FORCE_HINT));
         DASHLE_TRY_EXPECTED_CONST(hostBase, virtualToHost(virtualBase));
 
@@ -154,7 +152,11 @@ Expected<void> Environment::loadBinary(const std::span<const u8> buffer) {
     }
 
     // Handle relocations.
-    // TODO
+    DASHLE_TRY_EXPECTED_VOID(handleRelocations({
+        .header = header,
+        .virtualBase = m_BinaryBase.value(),
+        .resolver = this
+    }));
 
     // Set correct protections.
     // TODO

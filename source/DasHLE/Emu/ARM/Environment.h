@@ -5,24 +5,25 @@
 
 #include "DasHLE/Utils/FS.h"
 #include "DasHLE/Host/Memory.h"
+#include "DasHLE/Emu/ARM/Relocs.h"
 
 namespace dashle::emu::arm {
 
 namespace dynarmic = Dynarmic;
 namespace dynarmic32 = dynarmic::A32;
+namespace fs = dashle::utils::fs;
 
 enum class BinaryVersion {
     Armeabi,    // v5TE
     Armeabi_v7a // v7
 };
 
-class Environment : public dynarmic32::UserCallbacks {
+class Environment : public dynarmic32::UserCallbacks, public RelocationDelegate {
     std::unique_ptr<host::memory::MemoryManager> m_Mem;
     Optional<uaddr> m_BinaryBase;
     Optional<uaddr> m_StackBase;
+    usize m_StackSize;
     Optional<BinaryVersion> m_BinaryVersion;
-
-    virtual Expected<uaddr> virtualToHost(uaddr vaddr) const;
 
     /* Dynarmic callbacks */
 
@@ -49,15 +50,21 @@ class Environment : public dynarmic32::UserCallbacks {
     void AddTicks(std::uint64_t ticks) override final {}
     std::uint64_t GetTicksRemaining() override final { return static_cast<u64>(-1); }
 
+    /* Relocation callbacks */
+
+    Expected<uaddr> virtualToHost(uaddr vaddr) const override;
+    Expected<uaddr> resolveSymbol(const std::string& symbolName) override;
+
 public:
     Environment(std::unique_ptr<host::memory::MemoryManager> mem, usize stackSize);
     virtual ~Environment() {}
 
-    Expected<void> openBinary(const dashle::utils::fs::path& path);
+    Expected<void> openBinary(const fs::path& path);
     Expected<void> loadBinary(const std::span<const u8> buffer);
 
     Optional<uaddr> binaryBase() const { return m_BinaryBase; }
     Optional<uaddr> stackBase() const { return m_StackBase; }
+    usize stackSize() const { return m_StackSize; }
     Optional<BinaryVersion> binaryVersion() const { return m_BinaryVersion; }
 };
 

@@ -1,7 +1,5 @@
 #include "Base.h"
 
-#include <cstdio>
-
 // Base
 
 std::string dashle::errorAsString(Error error) {
@@ -17,6 +15,7 @@ std::string dashle::errorAsString(Error error) {
         ERROR_CASE(InvalidDataEncoding);
         ERROR_CASE(NoPIE);
         ERROR_CASE(InvalidArch);
+        ERROR_CASE(InvalidRelocation);
         ERROR_CASE(NoSegments);
         ERROR_CASE(NoSections);
         ERROR_CASE(InvalidSegment);
