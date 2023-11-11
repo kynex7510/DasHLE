@@ -77,10 +77,10 @@ void MemoryManager::initialize() {
     DASHLE_ASSERT(m_HostAllocator->initialize());
 
     // Add main free block.
-    const auto pair = m_Data->freeBlocks.insert(FreeBlock{
+    const auto pair = m_Data->freeBlocks.insert({
         .virtualBase = m_Offset,
         .size = maxMemory()});
-    DASHLE_ASSERT(pair.second); // Shouldn't happen.
+    DASHLE_ASSERT(pair.second);
 }
 
 void MemoryManager::finalize() {
@@ -144,7 +144,7 @@ void MemoryManager::reset() {
 
 Expected<const AllocatedBlock*> MemoryManager::blockFromVAddr(uaddr vaddr) const {
     const auto& allocatedBlocks = m_Data->allocatedBlocks;
-    const auto it = allocatedBlocks.find(AllocatedBlock{ .virtualBase = vaddr });
+    const auto it = allocatedBlocks.find({ .virtualBase = vaddr });
 
     if (it != allocatedBlocks.end())
         return &*it;
@@ -152,7 +152,23 @@ Expected<const AllocatedBlock*> MemoryManager::blockFromVAddr(uaddr vaddr) const
     return Unexpected(Error::NotFound);
 }
 
-Expected<uaddr> MemoryManager::allocate(uaddr hint, usize size, usize flags) {
+static Expected<FreeBlockSet::iterator> findFreeBlock(FreeBlockSet& freeBlocks, usize size) {
+    // Find the smallest block that can hold size bytes (best-fit).
+    // This is optimized for small allocations.
+    auto it = freeBlocks.lower_bound({.size = size});
+    if (it == freeBlocks.end())
+        return Unexpected(Error::NoVirtualMemory);
+
+    return it;
+}
+
+Expected<uaddr> MemoryManager::findFreeAddr(usize size) const {
+    return findFreeBlock(m_Data->freeBlocks, size).and_then([](FreeBlockSet::iterator it) -> Expected<uaddr> {
+        return it->virtualBase;
+    });
+}
+
+Expected<const AllocatedBlock*> MemoryManager::allocate(uaddr hint, usize size, usize flags) {
     if (!size)
         return Unexpected(Error::InvalidSize);
 
@@ -205,20 +221,18 @@ Expected<uaddr> MemoryManager::allocate(uaddr hint, usize size, usize flags) {
                 freeBlocks.insert(std::move(freeBlockLast));
 
             // Add the new allocated block.
-            allocatedBlocks.insert(allocatedBlock);
+            auto ret = allocatedBlocks.insert(allocatedBlock);
+            DASHLE_ASSERT(ret.second);
             m_UsedMemory += allocatedBlock.size;
-            return allocatedBlock.virtualBase;
+            return &*ret.first;
         } else if (flags & flags::FORCE_HINT) {
             // Fail if we are explicitly asked for an address.
             return Unexpected(Error::NoVirtualMemory);
         }
     }
 
-    // Find the smallest block that can hold size bytes (best-fit).
-    // This is optimized for small allocations.
-    auto it = freeBlocks.lower_bound(FreeBlock({.size = size}));
-    if (it == freeBlocks.end())
-        return Unexpected(Error::NoVirtualMemory);
+    // Find free block.
+    DASHLE_TRY_EXPECTED(it, findFreeBlock(freeBlocks, size));
 
     // Allocate block in memory.
     auto freeBlockNode = freeBlocks.extract(it);
@@ -240,9 +254,10 @@ Expected<uaddr> MemoryManager::allocate(uaddr hint, usize size, usize flags) {
         freeBlocks.insert(std::move(freeBlockNode));
 
     // Add the new allocated block.
-    allocatedBlocks.insert(allocatedBlock);
+    auto ret = allocatedBlocks.insert(allocatedBlock);
+    DASHLE_ASSERT(ret.second);
     m_UsedMemory += allocatedBlock.size;
-    return allocatedBlock.virtualBase;
+    return &*ret.first;
 }
 
 Expected<void> MemoryManager::free(uaddr vbase) {
@@ -250,7 +265,7 @@ Expected<void> MemoryManager::free(uaddr vbase) {
     auto& freeBlocks = m_Data->freeBlocks;
 
     // Find allocated block.
-    auto it = allocatedBlocks.find(AllocatedBlock{.virtualBase = vbase});
+    auto it = allocatedBlocks.find({.virtualBase = vbase});
     if (it == allocatedBlocks.end() || it->virtualBase != vbase)
         return Unexpected(Error::NotFound);
 
@@ -261,7 +276,7 @@ Expected<void> MemoryManager::free(uaddr vbase) {
 
     const auto handleBlock = [&newFreeBlock=newFreeBlock](FreeBlockSet& freeBlocks, const FreeBlock& block, bool prev) {
         const auto freeBlockIt = freeBlocks.find(block);
-        DASHLE_ASSERT(freeBlockIt != freeBlocks.end()); // Shouldn't happen.
+        DASHLE_ASSERT(freeBlockIt != freeBlocks.end());
         // Update new free block.
         if (prev)
             newFreeBlock.virtualBase = freeBlockIt->virtualBase;

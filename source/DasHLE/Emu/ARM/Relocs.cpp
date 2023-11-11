@@ -46,7 +46,15 @@ static Expected<void> handleRelArray(const RelocationContext& ctx, const RelType
         const auto rel = &relArray[i];
         DASHLE_TRY_EXPECTED_CONST(addr, ctx.resolver->virtualToHost(ctx.virtualBase + rel->r_offset));
         DASHLE_TRY_EXPECTED_CONST(symbolName, elf::getSymbolName(ctx.header, rel->symbolIndex()));
-        DASHLE_TRY_EXPECTED_CONST(symbol, ctx.resolver->resolveSymbol(symbolName));
+
+        uaddr symbol = 0u;
+        if (!symbolName.empty()) {
+            const auto ret = ctx.resolver->resolveSymbol(symbolName);
+            if (!ret)
+                return Unexpected(ret.error());
+            symbol = ret.value();
+        }
+
         const auto info = RelocationInfo {
             .addr = addr,
             .type = rel->type(),
@@ -80,42 +88,54 @@ static Expected<void> handleRelaArray(const RelocationContext& ctx, const RelaTy
 }
 
 static Expected<void> handleRel(const RelocationContext& ctx) {
-    DASHLE_TRY_EXPECTED_CONST(relEntry, elf::getDynEntry(ctx.header, DT_REL));
-    DASHLE_TRY_EXPECTED_CONST(relEntrySize, elf::getDynEntry(ctx.header, DT_RELSZ));
-    DASHLE_TRY_EXPECTED_CONST(relEntryEnt, elf::getDynEntry(ctx.header, DT_RELENT));
+    const auto relEntry = elf::getDynEntry(ctx.header, DT_REL);
+    const auto relEntrySize = elf::getDynEntry(ctx.header, DT_RELSZ);
+    const auto relEntryEnt = elf::getDynEntry(ctx.header, DT_RELENT);
 
-    const auto base = reinterpret_cast<uaddr>(ctx.header);
-    const auto relArray = reinterpret_cast<RelType*>(base + relEntry->d_un.d_ptr);
-    const usize size = relEntrySize->d_un.d_val / relEntryEnt->d_un.d_val;
-    return handleRelArray(ctx, relArray, size);
+    if (relEntry && relEntrySize && relEntryEnt) {
+        const auto base = reinterpret_cast<uaddr>(ctx.header);
+        const auto relArray = reinterpret_cast<RelType*>(base + relEntry.value()->d_un.d_ptr);
+        const usize size = relEntrySize.value()->d_un.d_val / relEntryEnt.value()->d_un.d_val;
+        return handleRelArray(ctx, relArray, size);
+    }
+
+    return EXPECTED_VOID;
 }
 
 static Expected<void> handleRela(const RelocationContext& ctx) {
-    DASHLE_TRY_EXPECTED_CONST(relaEntry, elf::getDynEntry(ctx.header, DT_RELA));
-    DASHLE_TRY_EXPECTED_CONST(relaEntrySize, elf::getDynEntry(ctx.header, DT_RELASZ));
-    DASHLE_TRY_EXPECTED_CONST(relaEntryEnt, elf::getDynEntry(ctx.header, DT_RELAENT));
+    const auto relaEntry = elf::getDynEntry(ctx.header, DT_RELA);
+    const auto relaEntrySize = elf::getDynEntry(ctx.header, DT_RELASZ);
+    const auto relaEntryEnt = elf::getDynEntry(ctx.header, DT_RELAENT);
 
-    const auto base = reinterpret_cast<uaddr>(ctx.header);
-    const auto relaArray = reinterpret_cast<RelaType*>(base + relaEntry->d_un.d_ptr);
-    const usize size = relaEntrySize->d_un.d_val / relaEntryEnt->d_un.d_val;
-    return handleRelaArray(ctx, relaArray, size);
+    if (relaEntry && relaEntrySize && relaEntryEnt) {
+        const auto base = reinterpret_cast<uaddr>(ctx.header);
+        const auto relaArray = reinterpret_cast<RelaType*>(base + relaEntry.value()->d_un.d_ptr);
+        const usize size = relaEntrySize.value()->d_un.d_val / relaEntryEnt.value()->d_un.d_val;
+        return handleRelaArray(ctx, relaArray, size);
+    }
+
+    return EXPECTED_VOID;
 }
 
 static Expected<void> handleJmprel(const RelocationContext& ctx) {
-    DASHLE_TRY_EXPECTED_CONST(jmprelEntry, elf::getDynEntry(ctx.header, DT_JMPREL));
-    DASHLE_TRY_EXPECTED_CONST(jmprelEntrySize, elf::getDynEntry(ctx.header, DT_PLTRELSZ));
-    DASHLE_TRY_EXPECTED_CONST(jmprelEntryType, elf::getDynEntry(ctx.header, DT_PLTREL));
+    const auto jmprelEntry = elf::getDynEntry(ctx.header, DT_JMPREL);
+    const auto jmprelEntrySize = elf::getDynEntry(ctx.header, DT_PLTRELSZ);
+    const auto jmprelEntryType = elf::getDynEntry(ctx.header, DT_PLTREL);
+
+    if (!jmprelEntry || !jmprelEntrySize || !jmprelEntryType)
+        return EXPECTED_VOID;
+
     const auto base = reinterpret_cast<uaddr>(ctx.header);
 
-    if (jmprelEntryType->d_un.d_val == DT_REL) {
-        const auto jmprelArray = reinterpret_cast<RelType*>(base + jmprelEntry->d_un.d_ptr);
-        const usize size = jmprelEntrySize->d_un.d_val / sizeof(RelType);   
+    if (jmprelEntryType.value()->d_un.d_val == DT_REL) {
+        const auto jmprelArray = reinterpret_cast<RelType*>(base + jmprelEntry.value()->d_un.d_ptr);
+        const usize size = jmprelEntrySize.value()->d_un.d_val / sizeof(RelType);   
         return handleRelArray(ctx, jmprelArray, size);
     }
 
-    if (jmprelEntryType->d_un.d_val == DT_RELA) {
-        const auto jmprelArray = reinterpret_cast<RelaType*>(base + jmprelEntry->d_un.d_ptr);
-        const usize size = jmprelEntrySize->d_un.d_val / sizeof(RelaType);
+    if (jmprelEntryType.value()->d_un.d_val == DT_RELA) {
+        const auto jmprelArray = reinterpret_cast<RelaType*>(base + jmprelEntry.value()->d_un.d_ptr);
+        const usize size = jmprelEntrySize.value()->d_un.d_val / sizeof(RelaType);
         return handleRelaArray(ctx, jmprelArray, size);
     }
 
@@ -123,12 +143,9 @@ static Expected<void> handleJmprel(const RelocationContext& ctx) {
 }
 
 Expected<void> dashle::emu::arm::handleRelocations(const RelocationContext& ctx) {
-    return handleRel(ctx);
-    /*
     return handleRel(ctx).and_then([&ctx] {
         return handleRela(ctx);
     }).and_then([&ctx] {
         return handleJmprel(ctx);
     });
-    */
 }

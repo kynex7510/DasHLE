@@ -67,10 +67,13 @@ public:
     // Get allocated block from virtual address.
     Expected<const AllocatedBlock*> blockFromVAddr(uaddr vaddr) const;
 
-    // Allocate memory, return the virtual address.
-    Expected<uaddr> allocate(uaddr hint, usize size, usize flags);
+    // Find an address that can be used for allocation.
+    Expected<uaddr> findFreeAddr(usize size) const;
 
-    Expected<uaddr> allocate(usize size, usize flags = flags::READ | flags::WRITE) {
+    // Allocate memory, return the virtual address.
+    Expected<const AllocatedBlock*> allocate(uaddr hint, usize size, usize flags);
+
+    Expected<const AllocatedBlock*> allocate(usize size, usize flags = flags::READ | flags::WRITE) {
         return allocate(invalidAddr(), size, flags);
     }
 

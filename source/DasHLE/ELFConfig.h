@@ -8,6 +8,7 @@ namespace dashle::elf {
 
 inline const auto& getHeader = &utils::elf::getHeader<Config>;
 inline const auto& getSegments = &utils::elf::getSegments<Config>;
+inline const auto& getSegmentAllocBase = &utils::elf::getSegmentAllocBase<Config>;
 inline const auto& getSegmentAllocSize = &utils::elf::getSegmentAllocSize<Config>;
 inline const auto& getDynEntries = &utils::elf::getDynEntries<Config>;
 inline const auto& getDynEntry = &utils::elf::getDynEntry<Config>;

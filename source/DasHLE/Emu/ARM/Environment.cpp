@@ -100,6 +100,7 @@ Expected<uaddr> Environment::virtualToHost(uaddr vaddr) const {
 
 Expected<uaddr> Environment::resolveSymbol(const std::string& symbolName) {
     // TODO
+    DASHLE_LOG_LINE("Symbol to resolve: {}", symbolName);
     return 0u;
 }
 
@@ -111,7 +112,7 @@ Environment::Environment(std::unique_ptr<host::memory::MemoryManager> mem, usize
     if (m_StackSize) {
         auto ret = m_Mem->allocate(m_Mem->maxMemory() - m_StackSize, m_StackSize, host::memory::flags::READ_WRITE);
         DASHLE_ASSERT(ret);
-        m_StackBase = ret.value();
+        m_StackBase = ret.value()->virtualBase;
     }
 }
 
@@ -132,24 +133,19 @@ Expected<void> Environment::loadBinary(const std::span<const u8> buffer) {
 
     // Allocate and map segments.
     DASHLE_TRY_EXPECTED_CONST(loadSegments, elf::getSegments(header, PT_LOAD));
+    DASHLE_TRY_EXPECTED(binaryBase, m_Mem->findFreeAddr(0u));
 
-    auto hint = m_Mem->invalidAddr();
     for (const auto segment : loadSegments) {
-        DASHLE_TRY_EXPECTED_CONST(size, elf::getSegmentAllocSize(segment));
-        DASHLE_TRY_EXPECTED_CONST(virtualBase, m_Mem->allocate(hint, size, host::memory::flags::READ_WRITE | host::memory::flags::FORCE_HINT));
-        DASHLE_TRY_EXPECTED_CONST(hostBase, virtualToHost(virtualBase));
-
+        const auto allocBase = elf::getSegmentAllocBase(segment, binaryBase);
+        DASHLE_TRY_EXPECTED_CONST(allocSize, elf::getSegmentAllocSize(segment));
+        DASHLE_TRY_EXPECTED_CONST(block, m_Mem->allocate(allocBase, allocSize, host::memory::flags::READ_WRITE | host::memory::flags::FORCE_HINT));    
+        const auto offset = segment->p_vaddr - (allocBase - binaryBase);
         std::copy(buffer.data() + segment->p_offset,
             buffer.data() + segment->p_offset + segment->p_filesz,
-            reinterpret_cast<u8*>(hostBase) + segment->p_vaddr);
-
-        if (hint == m_Mem->invalidAddr()) {
-            m_BinaryBase = virtualBase;
-            hint = virtualBase + size;
-        } else {
-            hint += size;
-        }
+            reinterpret_cast<u8*>(block->hostBase) + offset);
     }
+
+    m_BinaryBase = binaryBase;
 
     // Handle relocations.
     DASHLE_TRY_EXPECTED_VOID(handleRelocations({

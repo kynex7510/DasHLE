@@ -12,7 +12,6 @@ int main() {
         return 1;
     }
 
-    /*
     const auto env = ctx.env();
     const auto binaryBase = env->binaryBase().value();
     DASHLE_LOG_LINE("Binary base: 0x{:X}", binaryBase);
@@ -21,6 +20,5 @@ int main() {
     ctx.initCpu();
     ctx.execute(binaryBase + 0x2985AB);
     DASHLE_LOG_LINE("R0: 0x{:X}", ctx.getRegister(arm::REG_R0));
-    */
     return 0;
 }

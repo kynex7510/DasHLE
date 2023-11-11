@@ -427,6 +427,14 @@ Expected<Segments<CFG>> getSegments(const typename CFG::HeaderType* header, type
 }
 
 template <ConfigType CFG>
+uaddr getSegmentAllocBase(const typename CFG::ProgramHeaderType* segment, uaddr base) {
+    if (segment->p_align > 1)
+        return alignAddr(base + segment->p_vaddr, segment->p_align);
+
+    return segment->p_vaddr;
+}
+
+template <ConfigType CFG>
 Expected<usize> getSegmentAllocSize(const typename CFG::ProgramHeaderType* segment) {
    if (segment->p_memsz < segment->p_filesz)
     return Unexpected(Error::InvalidSegment);
