@@ -18,6 +18,8 @@ inline const auto& getDynEntries = &internal::ielf::getDynEntries<Config>;
 inline const auto& getDynEntry = &internal::ielf::getDynEntry<Config>;
 inline const auto& getSymTab = &internal::ielf::getSymTab<Config>;
 inline const auto& getSymbolName = &internal::ielf::getSymbolName<Config>;
+inline const auto& getInitializers = &internal::ielf::getInitializers<Config>;
+inline const auto& getFinalizers = &internal::ielf::getFinalizers<Config>;
 
 constexpr static usize wrapPermissionFlags(Config::WordType flags) {
     usize perm = 0;

@@ -23,6 +23,8 @@ class Environment : public dynarmic32::UserCallbacks, public RelocationDelegate 
     Optional<uaddr> m_StackBase;
     usize m_StackSize;
     Optional<BinaryVersion> m_BinaryVersion;
+    std::vector<uaddr> m_Initializers;
+    std::vector<uaddr> m_Finalizers;
 
     uaddr virtualToHostForAccess(uaddr vaddr, usize flags) const;
 

@@ -158,8 +158,11 @@ Expected<void> Environment::loadBinary(const std::span<const u8> buffer) {
         DASHLE_TRY_EXPECTED_VOID(m_Mem->setFlags(vbase, flags));
     }
 
-    // Call initializers.
-    // TODO
+    // Get initializers and finalizers.
+    DASHLE_TRY_EXPECTED_CONST(initializers, elf::getInitializers(header));
+    DASHLE_TRY_EXPECTED_CONST(finalizers, elf::getFinalizers(header));
+    m_Initializers = std::move(initializers);
+    m_Finalizers = std::move(finalizers);
 
     return EXPECTED_VOID;
 }

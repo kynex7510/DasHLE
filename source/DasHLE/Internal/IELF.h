@@ -50,6 +50,10 @@ constexpr static auto DT_RELSZ = 18;
 constexpr static auto DT_RELENT	= 19;
 constexpr static auto DT_PLTREL	= 20;
 constexpr static auto DT_JMPREL	= 23;
+constexpr static auto DT_INIT_ARRAY	= 25;
+constexpr static auto DT_FINI_ARRAY	= 26;
+constexpr static auto DT_INIT_ARRAYSZ = 27;
+constexpr static auto DT_FINI_ARRAYSZ = 28;
 
 constexpr static auto SHT_LOPROC = 0x70000000;
 constexpr static auto SHT_ARM_ATTRIBUTES = SHT_LOPROC + 3;
@@ -509,6 +513,40 @@ Expected<std::string> getSymbolName(const typename CFG::HeaderType* header, type
     }
 
     return std::string();
+}
+
+template <ConfigType CFG>
+Expected<std::vector<uaddr>> getInitializers(const typename CFG::HeaderType* header) {
+    std::vector<uaddr> vec;
+    const auto initEntry = getDynEntry<CFG>(header, DT_INIT_ARRAY);
+    const auto initEntrySz = getDynEntry<CFG>(header, DT_INIT_ARRAYSZ);
+
+    if (initEntry && initEntrySz) {
+        const auto base = reinterpret_cast<uaddr>(header);
+        const auto initArray = reinterpret_cast<const typename CFG::AddrType*>(base + initEntry.value()->d_un.d_ptr);
+        const usize initArraySize = initEntrySz.value()->d_un.d_val / sizeof(typename CFG::AddrType);
+        for (auto i = 0u; i < initArraySize; ++i)
+            vec.push_back(initArray[i]);
+    }
+
+    return vec;
+}
+
+template <ConfigType CFG>
+Expected<std::vector<uaddr>> getFinalizers(const typename CFG::HeaderType* header) {
+    std::vector<uaddr> vec;
+    const auto finiEntry = getDynEntry<CFG>(header, DT_FINI_ARRAY);
+    const auto finiEntrySz = getDynEntry<CFG>(header, DT_FINI_ARRAYSZ);
+
+    if (finiEntry && finiEntrySz) {
+        const auto base = reinterpret_cast<uaddr>(header);
+        const auto finiArray = reinterpret_cast<const typename CFG::AddrType*>(base + finiEntry.value()->d_un.d_ptr);
+        const usize finiArraySize = finiEntrySz.value()->d_un.d_val / sizeof(typename CFG::AddrType);
+        for (auto i = 0u; i < finiArraySize; ++i)
+            vec.push_back(finiArray[i]);
+    }
+
+    return vec;
 }
 
 } // namespace dashle::internal::ielf
