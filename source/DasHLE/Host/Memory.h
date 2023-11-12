@@ -81,7 +81,7 @@ public:
     Expected<void> free(uaddr vbase);
 
     // Set memory flags.
-    Expected<void> setFlags(uaddr vbase, usize flags);
+    Expected<usize> setFlags(uaddr vbase, usize flags);
 };
 
 // Translate a virtual address to an host address.

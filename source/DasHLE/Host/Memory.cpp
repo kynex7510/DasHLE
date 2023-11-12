@@ -339,11 +339,12 @@ Expected<void> MemoryManager::free(uaddr vbase) {
     return EXPECTED_VOID;
 }
 
-Expected<void> MemoryManager::setFlags(uaddr vbase, usize flags) {
-    return blockFromVAddr(vbase).and_then([vbase, flags](const AllocatedBlock* block) -> Expected<void> {
+Expected<usize> MemoryManager::setFlags(uaddr vbase, usize flags) {
+    return blockFromVAddr(vbase).and_then([vbase, flags](const AllocatedBlock* block) -> Expected<usize> {
         if (block->virtualBase == vbase) {
+            const auto oldFlags = block->flags;
             const_cast<AllocatedBlock*>(block)->flags = flags;
-            return EXPECTED_VOID;
+            return oldFlags;
         }
 
         return Unexpected(Error::InvalidAddress);

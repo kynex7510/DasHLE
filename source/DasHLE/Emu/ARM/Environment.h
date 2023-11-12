@@ -3,7 +3,7 @@
 
 #include "dynarmic/interface/A32/a32.h"
 
-#include "DasHLE/Utils/FS.h"
+#include "DasHLE/Host/FS.h"
 #include "DasHLE/Host/Memory.h"
 #include "DasHLE/Emu/ARM/Relocs.h"
 
@@ -11,7 +11,6 @@ namespace dashle::emu::arm {
 
 namespace dynarmic = Dynarmic;
 namespace dynarmic32 = dynarmic::A32;
-namespace fs = dashle::utils::fs;
 
 enum class BinaryVersion {
     Armeabi,    // v5TE
@@ -24,6 +23,13 @@ class Environment : public dynarmic32::UserCallbacks, public RelocationDelegate 
     Optional<uaddr> m_StackBase;
     usize m_StackSize;
     Optional<BinaryVersion> m_BinaryVersion;
+
+    uaddr virtualToHostForAccess(uaddr vaddr, usize flags) const;
+
+    /* Relocation callbacks */
+
+    Expected<uaddr> virtualToHost(uaddr vaddr) const override;
+    Expected<uaddr> resolveSymbol(const std::string& symbolName) override;
 
     /* Dynarmic callbacks */
 
@@ -50,16 +56,11 @@ class Environment : public dynarmic32::UserCallbacks, public RelocationDelegate 
     void AddTicks(std::uint64_t ticks) override final {}
     std::uint64_t GetTicksRemaining() override final { return static_cast<u64>(-1); }
 
-    /* Relocation callbacks */
-
-    Expected<uaddr> virtualToHost(uaddr vaddr) const override;
-    Expected<uaddr> resolveSymbol(const std::string& symbolName) override;
-
 public:
     Environment(std::unique_ptr<host::memory::MemoryManager> mem, usize stackSize);
     virtual ~Environment() {}
 
-    Expected<void> openBinary(const fs::path& path);
+    Expected<void> openBinary(const host::fs::path& path);
     Expected<void> loadBinary(const std::span<const u8> buffer);
 
     Optional<uaddr> binaryBase() const { return m_BinaryBase; }

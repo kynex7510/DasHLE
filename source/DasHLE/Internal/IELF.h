@@ -1,5 +1,5 @@
-#ifndef _DASHLE_UTILS_ELF_H
-#define _DASHLE_UTILS_ELF_H
+#ifndef _DASHLE_INTERNAL_IELF_H
+#define _DASHLE_INTERNAL_IELF_H
 
 #include "DasHLE/Base.h"
 
@@ -8,9 +8,9 @@
 #include <string>
 #include <algorithm>
 
-#define ELF_ASSERT_CONFIG(cfg) static_assert(::dashle::utils::elf::ConfigType<cfg>)
+#define IELF_ASSERT_CONFIG(cfg) static_assert(::dashle::internal::ielf::ConfigType<cfg>)
 
-namespace dashle::utils::elf {
+namespace dashle::internal::ielf {
 
 namespace constants {
 
@@ -56,7 +56,11 @@ constexpr static auto SHT_ARM_ATTRIBUTES = SHT_LOPROC + 3;
 
 constexpr static auto STN_UNDEF	= 0;
 
-} // namespace constants
+constexpr static auto PF_X = (1 << 0);
+constexpr static auto PF_W = (1 << 1);
+constexpr static auto PF_R = (1 << 2);
+
+} // namespace dashle::internal::ielf::constants
 
 using namespace constants;
 
@@ -507,6 +511,6 @@ Expected<std::string> getSymbolName(const typename CFG::HeaderType* header, type
     return std::string();
 }
 
-} // namespace dashle::utils::elf
+} // namespace dashle::internal::ielf
 
-#endif /* _DASHLE_UTILS_ELF_H */
+#endif /* _DASHLE_INTERNAL_IELF_H */

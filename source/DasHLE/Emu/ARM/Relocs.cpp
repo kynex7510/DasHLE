@@ -88,9 +88,9 @@ static Expected<void> handleRelaArray(const RelocationContext& ctx, const RelaTy
 }
 
 static Expected<void> handleRel(const RelocationContext& ctx) {
-    const auto relEntry = elf::getDynEntry(ctx.header, DT_REL);
-    const auto relEntrySize = elf::getDynEntry(ctx.header, DT_RELSZ);
-    const auto relEntryEnt = elf::getDynEntry(ctx.header, DT_RELENT);
+    const auto relEntry = elf::getDynEntry(ctx.header, elf::DT_REL);
+    const auto relEntrySize = elf::getDynEntry(ctx.header, elf::DT_RELSZ);
+    const auto relEntryEnt = elf::getDynEntry(ctx.header, elf::DT_RELENT);
 
     if (relEntry && relEntrySize && relEntryEnt) {
         const auto base = reinterpret_cast<uaddr>(ctx.header);
@@ -103,9 +103,9 @@ static Expected<void> handleRel(const RelocationContext& ctx) {
 }
 
 static Expected<void> handleRela(const RelocationContext& ctx) {
-    const auto relaEntry = elf::getDynEntry(ctx.header, DT_RELA);
-    const auto relaEntrySize = elf::getDynEntry(ctx.header, DT_RELASZ);
-    const auto relaEntryEnt = elf::getDynEntry(ctx.header, DT_RELAENT);
+    const auto relaEntry = elf::getDynEntry(ctx.header, elf::DT_RELA);
+    const auto relaEntrySize = elf::getDynEntry(ctx.header, elf::DT_RELASZ);
+    const auto relaEntryEnt = elf::getDynEntry(ctx.header, elf::DT_RELAENT);
 
     if (relaEntry && relaEntrySize && relaEntryEnt) {
         const auto base = reinterpret_cast<uaddr>(ctx.header);
@@ -118,22 +118,22 @@ static Expected<void> handleRela(const RelocationContext& ctx) {
 }
 
 static Expected<void> handleJmprel(const RelocationContext& ctx) {
-    const auto jmprelEntry = elf::getDynEntry(ctx.header, DT_JMPREL);
-    const auto jmprelEntrySize = elf::getDynEntry(ctx.header, DT_PLTRELSZ);
-    const auto jmprelEntryType = elf::getDynEntry(ctx.header, DT_PLTREL);
+    const auto jmprelEntry = elf::getDynEntry(ctx.header, elf::DT_JMPREL);
+    const auto jmprelEntrySize = elf::getDynEntry(ctx.header, elf::DT_PLTRELSZ);
+    const auto jmprelEntryType = elf::getDynEntry(ctx.header, elf::DT_PLTREL);
 
     if (!jmprelEntry || !jmprelEntrySize || !jmprelEntryType)
         return EXPECTED_VOID;
 
     const auto base = reinterpret_cast<uaddr>(ctx.header);
 
-    if (jmprelEntryType.value()->d_un.d_val == DT_REL) {
+    if (jmprelEntryType.value()->d_un.d_val == elf::DT_REL) {
         const auto jmprelArray = reinterpret_cast<RelType*>(base + jmprelEntry.value()->d_un.d_ptr);
         const usize size = jmprelEntrySize.value()->d_un.d_val / sizeof(RelType);   
         return handleRelArray(ctx, jmprelArray, size);
     }
 
-    if (jmprelEntryType.value()->d_un.d_val == DT_RELA) {
+    if (jmprelEntryType.value()->d_un.d_val == elf::DT_RELA) {
         const auto jmprelArray = reinterpret_cast<RelaType*>(base + jmprelEntry.value()->d_un.d_ptr);
         const usize size = jmprelEntrySize.value()->d_un.d_val / sizeof(RelaType);
         return handleRelaArray(ctx, jmprelArray, size);

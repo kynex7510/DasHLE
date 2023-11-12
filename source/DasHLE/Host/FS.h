@@ -1,5 +1,5 @@
-#ifndef _DASHLE_UTILS_FS_H
-#define _DASHLE_UTILS_FS_H
+#ifndef _DASHLE_HOST_FS_H
+#define _DASHLE_HOST_FS_H
 
 #include "DasHLE/Base.h"
 
@@ -7,7 +7,7 @@
 #include <fstream>
 #include <filesystem>
 
-namespace dashle::utils::fs {
+namespace dashle::host::fs {
 
 using namespace std::filesystem;
 
@@ -22,6 +22,6 @@ inline Expected<void> readFile(const path& path, std::vector<u8>& buffer) {
     return EXPECTED_VOID;
 }
 
-} // dashle::utils::fs
+} // dashle::host::fs
 
-#endif /* _DASHLE_UTILS_FS_H */
+#endif /* _DASHLE_HOST_FS_H */

@@ -1,7 +1,7 @@
 #ifndef _DASHLE_EMU_ARM_RELOCS_H
 #define _DASHLE_EMU_ARM_RELOCS_H
 
-#include "DasHLE/Emu/ARM/ELFConfig.h"
+#include "DasHLE/Emu/ARM/ELF.h"
 
 namespace dashle::emu::arm {
 

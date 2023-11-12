@@ -37,7 +37,7 @@ public:
 
     const Environment* env() { return m_Env.get(); }
 
-    Expected<void> openBinary(const dashle::utils::fs::path& path);
+    Expected<void> openBinary(const host::fs::path& path);
 
     void initCpu();
     void setRegister(usize index, usize value);

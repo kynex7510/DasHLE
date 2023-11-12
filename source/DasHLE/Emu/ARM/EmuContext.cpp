@@ -39,7 +39,7 @@ dynarmic32::UserConfig EmuContext::buildConfig() const {
 
 EmuContext::EmuContext() { m_Env = std::make_unique<DefaultEnvironment>(STACK_SIZE); }
 
-Expected<void> EmuContext::openBinary(const dashle::utils::fs::path& path) { return m_Env->openBinary(path); }
+Expected<void> EmuContext::openBinary(const host::fs::path& path) { return m_Env->openBinary(path); }
 
 void EmuContext::initCpu() {
     if (m_Jit)
