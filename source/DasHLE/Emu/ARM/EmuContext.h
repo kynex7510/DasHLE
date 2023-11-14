@@ -43,7 +43,9 @@ public:
     void setRegister(usize index, usize value);
     usize getRegister(usize index) const;
     void setThumb(bool thumb);
-    void execute(uaddr addr);
+    dynarmic::HaltReason execute(uaddr addr);
+
+    void dump();
 };
 
 } // dashle::emu::arm

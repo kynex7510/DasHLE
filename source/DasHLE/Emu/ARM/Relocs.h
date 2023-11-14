@@ -5,8 +5,8 @@
 
 namespace dashle::emu::arm {
 
-struct RelocationDelegate {
-    virtual Expected<uaddr> virtualToHost(uaddr vaddr) const = 0;
+class RelocationDelegate : public host::memory::TranslatorDelegate {
+public:
     virtual Expected<uaddr> resolveSymbol(const std::string& symbolName) = 0;
 };
 

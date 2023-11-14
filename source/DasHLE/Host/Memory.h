@@ -26,6 +26,11 @@ struct AllocatedBlock {
     usize flags = 0u;
 };
 
+class TranslatorDelegate {
+public:
+    virtual Expected<uaddr> virtualToHost(uaddr vaddr) const = 0;
+};
+
 class HostAllocator {
 public:
     virtual ~HostAllocator() {}

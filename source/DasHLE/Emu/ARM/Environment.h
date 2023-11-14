@@ -21,7 +21,7 @@ class Environment : public dynarmic32::UserCallbacks, public RelocationDelegate 
     std::unique_ptr<host::memory::MemoryManager> m_Mem;
     Optional<uaddr> m_BinaryBase;
     Optional<uaddr> m_StackBase;
-    usize m_StackSize;
+    Optional<uaddr> m_StackTop;
     Optional<BinaryVersion> m_BinaryVersion;
     std::vector<uaddr> m_Initializers;
     std::vector<uaddr> m_Finalizers;
@@ -67,8 +67,10 @@ public:
 
     Optional<uaddr> binaryBase() const { return m_BinaryBase; }
     Optional<uaddr> stackBase() const { return m_StackBase; }
-    usize stackSize() const { return m_StackSize; }
+    Optional<uaddr> stackTop() const { return m_StackTop; }
     Optional<BinaryVersion> binaryVersion() const { return m_BinaryVersion; }
+    const std::vector<uaddr>& initializers() { return m_Initializers; }
+    const std::vector<uaddr>& finalizers() { return m_Finalizers; }
 };
 
 class DefaultEnvironment final : public Environment {

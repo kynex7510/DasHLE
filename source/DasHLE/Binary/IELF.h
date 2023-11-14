@@ -1,16 +1,16 @@
-#ifndef _DASHLE_INTERNAL_IELF_H
-#define _DASHLE_INTERNAL_IELF_H
+#ifndef _DASHLE_BINARY_IELF_H
+#define _DASHLE_BINARY_IELF_H
 
-#include "DasHLE/Base.h"
+#include "DasHLE/Host/Memory.h"
 
 #include <span>
 #include <vector>
 #include <string>
 #include <algorithm>
 
-#define IELF_ASSERT_CONFIG(cfg) static_assert(::dashle::internal::ielf::ConfigType<cfg>)
+#define IELF_ASSERT_CONFIG(cfg) static_assert(::dashle::binary::ielf::ConfigType<cfg>)
 
-namespace dashle::internal::ielf {
+namespace dashle::binary::ielf {
 
 namespace constants {
 
@@ -64,7 +64,7 @@ constexpr static auto PF_X = (1 << 0);
 constexpr static auto PF_W = (1 << 1);
 constexpr static auto PF_R = (1 << 2);
 
-} // namespace dashle::internal::ielf::constants
+} // namespace dashle::binary::ielf::constants
 
 using namespace constants;
 
@@ -515,40 +515,41 @@ Expected<std::string> getSymbolName(const typename CFG::HeaderType* header, type
     return std::string();
 }
 
+struct FuncArrayInfo {
+    usize offset;
+    usize size;
+};
+
 template <ConfigType CFG>
-Expected<std::vector<uaddr>> getInitializers(const typename CFG::HeaderType* header) {
-    std::vector<uaddr> vec;
+Optional<FuncArrayInfo> getInitArrayInfo(const typename CFG::HeaderType* header) {
     const auto initEntry = getDynEntry<CFG>(header, DT_INIT_ARRAY);
     const auto initEntrySz = getDynEntry<CFG>(header, DT_INIT_ARRAYSZ);
 
     if (initEntry && initEntrySz) {
-        const auto base = reinterpret_cast<uaddr>(header);
-        const auto initArray = reinterpret_cast<const typename CFG::AddrType*>(base + initEntry.value()->d_un.d_ptr);
-        const usize initArraySize = initEntrySz.value()->d_un.d_val / sizeof(typename CFG::AddrType);
-        for (auto i = 0u; i < initArraySize; ++i)
-            vec.push_back(initArray[i]);
+        return FuncArrayInfo {
+            .offset = initEntry.value()->d_un.d_ptr,
+            .size = initEntrySz.value()->d_un.d_val / sizeof(typename CFG::AddrType)
+        };
     }
 
-    return vec;
+    return {};
 }
 
 template <ConfigType CFG>
-Expected<std::vector<uaddr>> getFinalizers(const typename CFG::HeaderType* header) {
-    std::vector<uaddr> vec;
+Optional<FuncArrayInfo> getFiniArrayInfo(const typename CFG::HeaderType* header) {
     const auto finiEntry = getDynEntry<CFG>(header, DT_FINI_ARRAY);
     const auto finiEntrySz = getDynEntry<CFG>(header, DT_FINI_ARRAYSZ);
 
     if (finiEntry && finiEntrySz) {
-        const auto base = reinterpret_cast<uaddr>(header);
-        const auto finiArray = reinterpret_cast<const typename CFG::AddrType*>(base + finiEntry.value()->d_un.d_ptr);
-        const usize finiArraySize = finiEntrySz.value()->d_un.d_val / sizeof(typename CFG::AddrType);
-        for (auto i = 0u; i < finiArraySize; ++i)
-            vec.push_back(finiArray[i]);
+        return FuncArrayInfo {
+            .offset = finiEntry.value()->d_un.d_ptr,
+            .size = finiEntrySz.value()->d_un.d_val / sizeof(typename CFG::AddrType)
+        };
     }
 
-    return vec;
+    return {};
 }
 
-} // namespace dashle::internal::ielf
+} // namespace dashle::binary::ielf
 
-#endif /* _DASHLE_INTERNAL_IELF_H */
+#endif /* _DASHLE_BINARY_IELF_H */

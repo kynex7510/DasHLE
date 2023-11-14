@@ -29,12 +29,11 @@ Expected<uaddr> Environment::virtualToHost(uaddr vaddr) const {
 
 Expected<uaddr> Environment::resolveSymbol(const std::string& symbolName) {
     // TODO
-    return 0u;
+    return 1u;
 }
 
 void Environment::PreCodeTranslationHook(bool isThumb, dynarmic32::VAddr pc, dynarmic32::IREmitter& ir) {
     // TODO: handle imports.
-    DASHLE_LOG_LINE("Code hook called (isThumb={}, pc=0x{:X})", isThumb, pc);
 }
 
 std::optional<std::uint32_t> Environment::MemoryReadCode(dynarmic32::VAddr vaddr) {
@@ -96,18 +95,19 @@ void Environment::CallSVC(u32 swi) {
 
 void Environment::ExceptionRaised(dynarmic32::VAddr pc, dynarmic32::Exception exception) {
     // TODO: handle exceptions.
-    DASHLE_UNREACHABLE("Unimplemented exception handling (pc={}, exception={})", pc, static_cast<u32>(exception));
+    DASHLE_UNREACHABLE("Unimplemented exception handling (pc=0x{:X}, exception={})", pc, static_cast<u32>(exception));
 }
 
-Environment::Environment(std::unique_ptr<host::memory::MemoryManager> mem, usize stackSize) : m_Mem(std::move(mem)), m_StackSize(stackSize) {
+Environment::Environment(std::unique_ptr<host::memory::MemoryManager> mem, usize stackSize) : m_Mem(std::move(mem)) {
     // Allocate zero page.
     DASHLE_ASSERT(m_Mem->allocate(0u, PAGE_SIZE, 0));
 
     // Allocate stack.
-    if (m_StackSize) {
-        auto ret = m_Mem->allocate(m_Mem->maxMemory() - m_StackSize, m_StackSize, host::memory::flags::READ_WRITE);
+    if (stackSize) {
+        auto ret = m_Mem->allocate(m_Mem->maxMemory() - stackSize, stackSize, host::memory::flags::READ_WRITE);
         DASHLE_ASSERT(ret);
         m_StackBase = ret.value()->virtualBase;
+        m_StackTop = m_StackBase.value() + stackSize;
     }
 }
 
@@ -134,8 +134,8 @@ Expected<void> Environment::loadBinary(const std::span<const u8> buffer) {
     for (const auto segment : loadSegments) {
         const auto allocBase = elf::getSegmentAllocBase(segment, binaryBase);
         DASHLE_TRY_EXPECTED_CONST(allocSize, elf::getSegmentAllocSize(segment));
-        DASHLE_TRY_EXPECTED_CONST(block, m_Mem->allocate(allocBase, allocSize, host::memory::flags::READ_WRITE | host::memory::flags::FORCE_HINT));    
-        
+        DASHLE_TRY_EXPECTED_CONST(block, m_Mem->allocate(allocBase, allocSize, host::memory::flags::READ_WRITE | host::memory::flags::FORCE_HINT));
+
         const auto offset = segment->p_vaddr - (block->virtualBase - binaryBase);
         std::copy(buffer.data() + segment->p_offset,
             buffer.data() + segment->p_offset + segment->p_filesz,
@@ -159,10 +159,32 @@ Expected<void> Environment::loadBinary(const std::span<const u8> buffer) {
     }
 
     // Get initializers and finalizers.
-    DASHLE_TRY_EXPECTED_CONST(initializers, elf::getInitializers(header));
-    DASHLE_TRY_EXPECTED_CONST(finalizers, elf::getFinalizers(header));
-    m_Initializers = std::move(initializers);
-    m_Finalizers = std::move(finalizers);
+    const auto initWrapper = elf::getInitArrayInfo(header);
+    const auto finiWrapper = elf::getFiniArrayInfo(header);
+
+    if (initWrapper) {
+        const auto& initArrayInfo = initWrapper.value();
+        DASHLE_TRY_EXPECTED_CONST(hostAddr, virtualToHost(m_BinaryBase.value() + initArrayInfo.offset));
+        const auto initArray = reinterpret_cast<const elf::Config::AddrType*>(hostAddr);
+        m_Initializers.clear();
+        for (auto i = 0u; i < initArrayInfo.size; ++i) {
+            const auto addr = initArray[i];
+            if (addr != 0 && addr != -1)
+                m_Initializers.push_back(addr);
+        }
+    }
+
+    if (finiWrapper) {
+        const auto& finiArrayInfo = finiWrapper.value();
+        DASHLE_TRY_EXPECTED_CONST(hostAddr, virtualToHost(m_BinaryBase.value() + finiArrayInfo.offset));
+        const auto finiArray = reinterpret_cast<const elf::Config::AddrType*>(hostAddr);
+        m_Finalizers.clear();
+        for (auto i = 0u; i < finiArrayInfo.size; ++i) {
+            const auto addr = finiArray[i];
+            if (addr != 0 && addr != -1)
+                m_Finalizers.push_back(finiArray[i]);
+        }
+    }
 
     return EXPECTED_VOID;
 }

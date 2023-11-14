@@ -47,10 +47,18 @@ void EmuContext::initCpu() {
 
     m_Jit = std::make_unique<dynarmic32::Jit>(buildConfig());
 
-    // Set stack base.
-    const auto stackBase = m_Env->stackBase();
-    if (stackBase)
-        setRegister(REG_SP, stackBase.value());
+    // Setup stack.
+    const auto stackTop = m_Env->stackTop();
+    if (stackTop)
+        setRegister(REG_SP, stackTop.value());
+
+    // Run initializers.
+    for (auto vaddr : m_Env->initializers()) {
+        if (auto reason = execute(vaddr); static_cast<u32>(reason) != 0) {
+            DASHLE_LOG_LINE("Init call failed (vaddr={}, reason={})", vaddr, static_cast<u32>(reason));
+            return;
+        }
+    }
 }
 
 void EmuContext::setRegister(usize index, usize value) {
@@ -71,9 +79,22 @@ void EmuContext::setThumb(bool thumb) {
     m_Jit->SetCpsr(thumb ? cpsrThumbEnable(cpsr) : cpsrThumbDisable(cpsr));
 }
 
-void EmuContext::execute(uaddr addr) {
+dynarmic::HaltReason EmuContext::execute(uaddr addr) {
     setRegister(REG_PC, clearThumb(addr));
     setThumb(isThumb(addr));
-    auto const reason = m_Jit->Run();
-    DASHLE_LOG_LINE("Halted with reason = {}", static_cast<u32>(reason));
+    return m_Jit->Run();
+}
+
+void EmuContext::dump() {
+    constexpr const char* REGS[] = {
+        "R0", "R1", "R2", "R3", "R4", "R5", "R6", "R7",
+        "R8", "R9", "R10", "R11", "R12", "SP", "LR", "PC"
+    };
+
+    DASHLE_LOG_LINE("=== CONTEXT DUMP ===");
+    for (auto i = 0; i < 16; ++i)
+        DASHLE_LOG_LINE("{}: 0x{:08X}", REGS[i], getRegister(i));
+
+    DASHLE_LOG_LINE("CPSR: 0x{:08X}", m_Jit->Cpsr());
+    DASHLE_LOG_LINE("FSPCR: 0x{:08X}", m_Jit->Fpscr());
 }

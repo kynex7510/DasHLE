@@ -18,7 +18,6 @@ int main() {
     DASHLE_LOG_LINE("Stack base: 0x{:X}", env->stackBase().value());
 
     ctx.initCpu();
-    ctx.execute(binaryBase + 0x2985AB);
-    DASHLE_LOG_LINE("R0: 0x{:X}", ctx.getRegister(arm::REG_R0));
+    ctx.dump();
     return 0;
 }

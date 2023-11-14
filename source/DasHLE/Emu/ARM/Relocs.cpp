@@ -34,6 +34,7 @@ static Expected<void> handleSingle(const RelocationContext& ctx, const Relocatio
     }
 
     if (info.type == R_ARM_ABS32 || info.type == R_ARM_GLOB_DAT || info.type == R_ARM_JUMP_SLOT) {
+        DASHLE_ASSERT(info.symbol);
         *reinterpret_cast<elf::Config::AddrType*>(info.addr) = info.symbol + info.addend;
         return EXPECTED_VOID;
     }
