@@ -21,6 +21,7 @@ std::string dashle::errorAsString(Error error) {
         ERROR_CASE(InvalidSegment);
         ERROR_CASE(RelocationFailed);
         ERROR_CASE(InvalidAddress);
+        ERROR_CASE(InvalidIndex);
         ERROR_CASE(NoVirtualMemory);
         ERROR_CASE(NoHostMemory);
         ERROR_CASE(NotFound);

@@ -16,6 +16,9 @@ set(Boost_NO_SYSTEM_PATHS ON)
 add_subdirectory(external/dynarmic)
 
 include_directories(external/dynarmic/src)
+# HACK
+include_directories(external/dynarmic/externals/mcl/include)
+include_directories(external/dynarmic/externals/fmt/include)
 include_directories(external/boost)
 
 # Project

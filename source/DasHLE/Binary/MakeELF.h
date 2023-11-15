@@ -25,13 +25,13 @@ constexpr static usize wrapPermissionFlags(Config::WordType flags) {
     usize perm = 0;
 
     if (flags & PF_R)
-        perm |= host::memory::flags::READ;
+        perm |= host::memory::flags::PERM_READ;
 
     if (flags & PF_W)
-        perm |= host::memory::flags::WRITE;
+        perm |= host::memory::flags::PERM_WRITE;
 
     if (flags & PF_X)
-        perm |= host::memory::flags::EXEC;
+        perm |= host::memory::flags::PERM_EXEC;
 
     return perm;
 }

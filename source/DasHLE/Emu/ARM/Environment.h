@@ -7,6 +7,10 @@
 #include "DasHLE/Host/Memory.h"
 #include "DasHLE/Emu/ARM/Relocs.h"
 
+//
+#include <unordered_map>
+//
+
 namespace dashle::emu::arm {
 
 namespace dynarmic = Dynarmic;
@@ -22,11 +26,17 @@ class Environment : public dynarmic32::UserCallbacks, public RelocationDelegate 
     Optional<uaddr> m_BinaryBase;
     Optional<uaddr> m_StackBase;
     Optional<uaddr> m_StackTop;
+    //
+    uaddr m_ILTBase;
+    usize m_ILTSize;
+    std::unordered_map<uaddr, std::string> m_ILT;
+    //
     Optional<BinaryVersion> m_BinaryVersion;
     std::vector<uaddr> m_Initializers;
     std::vector<uaddr> m_Finalizers;
 
-    uaddr virtualToHostForAccess(uaddr vaddr, usize flags) const;
+    Expected<uaddr> virtualToHostChecked(uaddr vaddr, usize flags) const;
+    Expected<void> populateILT();
 
     /* Relocation callbacks */
 
@@ -35,7 +45,7 @@ class Environment : public dynarmic32::UserCallbacks, public RelocationDelegate 
 
     /* Dynarmic callbacks */
 
-    void PreCodeTranslationHook(bool isThumb, dynarmic32::VAddr pc, dynarmic32::IREmitter& ir) override final;
+    bool PreCodeReadHook(bool isThumb, dynarmic32::VAddr pc, dynarmic32::IREmitter& ir) override final;
 
     std::optional<std::uint32_t> MemoryReadCode(dynarmic32::VAddr vaddr) override final;
 
@@ -48,6 +58,26 @@ class Environment : public dynarmic32::UserCallbacks, public RelocationDelegate 
     void MemoryWrite16(dynarmic32::VAddr vaddr, std::uint16_t value) override final;
     void MemoryWrite32(dynarmic32::VAddr vaddr, std::uint32_t value) override final;
     void MemoryWrite64(dynarmic32::VAddr vaddr, std::uint64_t value) override final;
+
+    bool MemoryWriteExclusive8(dynarmic32::VAddr vaddr, std::uint8_t value, std::uint8_t expected) override final {
+        MemoryWrite8(vaddr, value);
+        return true;
+    }
+
+    bool MemoryWriteExclusive16(dynarmic32::VAddr vaddr, std::uint16_t value, std::uint16_t expected) override final {
+        MemoryWrite16(vaddr, value);
+        return true;
+    }
+
+    bool MemoryWriteExclusive32(dynarmic32::VAddr vaddr, std::uint32_t value, std::uint32_t expected) override final {
+        MemoryWrite32(vaddr, value);
+        return true;
+    }
+
+    bool MemoryWriteExclusive64(dynarmic32::VAddr vaddr, std::uint64_t value, std::uint64_t expected) override final {
+        MemoryWrite64(vaddr, value);
+        return true;
+    }
 
     bool IsReadOnlyMemory(dynarmic32::VAddr vaddr) override final;
 

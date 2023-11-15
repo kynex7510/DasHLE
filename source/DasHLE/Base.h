@@ -36,46 +36,46 @@
 
 #endif // NDEBUG
 
-#define DASHLE_TRY_EXPECTED(name, expr)             \
-    auto name##Wrapper = (expr);                    \
-    if (!(name##Wrapper))                           \
-        return Unexpected((name##Wrapper).error()); \
-    auto name = name##Wrapper.value()
+#define DASHLE_TRY_EXPECTED(name, expr)                 \
+    auto _##name##Wrapper_ = (expr);                    \
+    if (!(_##name##Wrapper_))                           \
+        return Unexpected((_##name##Wrapper_).error()); \
+    auto name = _##name##Wrapper_.value()
 
-#define DASHLE_TRY_EXPECTED_CONST(name, expr)       \
-    const auto name##Wrapper = (expr);              \
-    if (!(name##Wrapper))                           \
-        return Unexpected((name##Wrapper).error()); \
-    const auto name = name##Wrapper.value()
+#define DASHLE_TRY_EXPECTED_CONST(name, expr)           \
+    const auto _##name##Wrapper_ = (expr);              \
+    if (!(_##name##Wrapper_))                           \
+        return Unexpected((_##name##Wrapper_).error()); \
+    const auto name = _##name##Wrapper_.value()
 
-#define DASHLE_TRY_EXPECTED_VOID(expr)              \
-    {                                               \
-        const auto voidWrapper = (expr);            \
-        if (!voidWrapper)                           \
-            return Unexpected(voidWrapper.error()); \
+#define DASHLE_TRY_EXPECTED_VOID(expr)                \
+    {                                                 \
+        const auto _voidWrapper_ = (expr);            \
+        if (!_voidWrapper_)                           \
+            return Unexpected(_voidWrapper_.error()); \
     }
 
 #define DASHLE_TRY_OPTIONAL(name, expr, error) \
-    auto name##Wrapper = (expr);               \
-    if (!(name##Wrapper))                      \
+    auto _##name##Wrapper_ = (expr);           \
+    if (!(_##name##Wrapper_))                  \
         return Unexpected((error));            \
-    auto name = name##Wrapper.value()
+    auto name = _##name##Wrapper_.value()
 
 #define DASHLE_TRY_OPTIONAL_CONST(name, expr, error) \
-    const auto name##Wrapper = (expr);               \
-    if (!(name##Wrapper))                            \
+    const auto _##name##Wrapper_ = (expr);           \
+    if (!(_##name##Wrapper_))                        \
         return Unexpected((error));                  \
-    const auto name = name##Wrapper.value()
+    const auto name = _##name##Wrapper_.value()
 
 #define DASHLE_ASSERT_WRAPPER(name, expr) \
-    auto name##Wrapper = (expr);          \
-    DASHLE_ASSERT(name##Wrapper);         \
-    auto name = name##Wrapper.value()
+    auto _##name##Wrapper_ = (expr);      \
+    DASHLE_ASSERT(_##name##Wrapper_);     \
+    auto name = _##name##Wrapper_.value()
 
-#define DASHLE_ASSERT_WRAPPER_CONST(name, expr)    \
-    const auto name##Wrapper = (expr);             \
-    DASHLE_ASSERT(name##Wrapper);                  \
-    const auto name = name##Wrapper.value()
+#define DASHLE_ASSERT_WRAPPER_CONST(name, expr) \
+    const auto _##name##Wrapper_ = (expr);      \
+    DASHLE_ASSERT(_##name##Wrapper_);           \
+    const auto name = _##name##Wrapper_.value()
 
 namespace dashle {
 
@@ -105,6 +105,7 @@ enum class Error {
     InvalidSegment,
     RelocationFailed,
     InvalidAddress,
+    InvalidIndex,
     NoVirtualMemory,
     NoHostMemory,
     NotFound,

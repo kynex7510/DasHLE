@@ -13,57 +13,40 @@ using RelType = elf::Config::RelType;
 using RelaType = elf::Config::RelaType;
 using AddrType = elf::Config::AddrType;
 
-struct RelocationInfo {
-    uaddr addr;   // Where to apply the relocation.
-    u32 type;     // Relocation type.
-    uaddr symbol; // Symbol value.
-    soff addend;  // Constant addend.
-};
+constexpr static bool isRelativeReloc(usize type) {
+    return type == R_ARM_RELATIVE;
+}
+
+constexpr static bool isSymbolReloc(usize type) {
+    return type == R_ARM_ABS32 || type == R_ARM_GLOB_DAT || type == R_ARM_JUMP_SLOT;
+}
 
 // Relocs
 
-static Expected<void> handleSingle(const RelocationContext& ctx, const RelocationInfo& info) {
-    if (info.type == R_ARM_RELATIVE) {
-        if (info.addend) {
-            *reinterpret_cast<elf::Config::AddrType*>(info.addr) = ctx.virtualBase + info.addend;
-        } else {
-            *reinterpret_cast<elf::Config::AddrType*>(info.addr) += ctx.virtualBase;
-        }
-
-        return EXPECTED_VOID;
-    }
-
-    if (info.type == R_ARM_ABS32 || info.type == R_ARM_GLOB_DAT || info.type == R_ARM_JUMP_SLOT) {
-        DASHLE_ASSERT(info.symbol);
-        *reinterpret_cast<elf::Config::AddrType*>(info.addr) = info.symbol + info.addend;
-        return EXPECTED_VOID;
-    }
-
-    return Unexpected(Error::InvalidRelocation);
+static Expected<uaddr> resolveSymbol(const RelocationContext& ctx, elf::Config::WordType symbolIndex) {
+    DASHLE_TRY_EXPECTED_CONST(symbolName, elf::getSymbolName(ctx.header, symbolIndex));
+    return ctx.resolver->resolveSymbol(symbolName);
 }
 
 static Expected<void> handleRelArray(const RelocationContext& ctx, const RelType* relArray, usize size) {
     for (auto i = 0u; i < size; ++i) {
         const auto rel = &relArray[i];
-        DASHLE_TRY_EXPECTED_CONST(addr, ctx.resolver->virtualToHost(ctx.virtualBase + rel->r_offset));
-        DASHLE_TRY_EXPECTED_CONST(symbolName, elf::getSymbolName(ctx.header, rel->symbolIndex()));
+        DASHLE_TRY_EXPECTED_CONST(patchAddr, ctx.resolver->virtualToHost(ctx.virtualBase + rel->r_offset));
 
-        uaddr symbol = 0u;
-        if (!symbolName.empty()) {
-            const auto ret = ctx.resolver->resolveSymbol(symbolName);
-            if (!ret)
-                return Unexpected(ret.error());
-            symbol = ret.value();
+        // Handle base relative relocation.
+        if (isRelativeReloc(rel->type())) {
+            *reinterpret_cast<elf::Config::AddrType*>(patchAddr) += ctx.virtualBase;
+            continue;
         }
 
-        const auto info = RelocationInfo {
-            .addr = addr,
-            .type = rel->type(),
-            .symbol = symbol,
-            .addend = 0u  
-        };
-        
-        DASHLE_TRY_EXPECTED_VOID(handleSingle(ctx, info));
+        // Handle symbol relocation.
+        if (isSymbolReloc(rel->type())) {
+            DASHLE_TRY_EXPECTED_CONST(value, resolveSymbol(ctx, rel->symbolIndex()));
+            *reinterpret_cast<elf::Config::AddrType*>(patchAddr) = value;
+            continue;
+        }
+
+        return Unexpected(Error::InvalidRelocation);
     }
 
     return EXPECTED_VOID;
@@ -72,17 +55,22 @@ static Expected<void> handleRelArray(const RelocationContext& ctx, const RelType
 static Expected<void> handleRelaArray(const RelocationContext& ctx, const RelaType* relaArray, usize size) {
     for (auto i = 0u; i < size; ++i) {
         const auto rela = &relaArray[i];
-        DASHLE_TRY_EXPECTED_CONST(addr, ctx.resolver->virtualToHost(ctx.virtualBase + rela->r_offset));
-        DASHLE_TRY_EXPECTED_CONST(symbolName, elf::getSymbolName(ctx.header, rela->symbolIndex()));
-        DASHLE_TRY_EXPECTED_CONST(symbol, ctx.resolver->resolveSymbol(symbolName));
-        const auto info = RelocationInfo {
-            .addr = addr,
-            .type = rela->type(),
-            .symbol = symbol,
-            .addend = rela->r_addend
-        };
+        DASHLE_TRY_EXPECTED_CONST(patchAddr, ctx.resolver->virtualToHost(ctx.virtualBase + rela->r_offset));
 
-        DASHLE_TRY_EXPECTED_VOID(handleSingle(ctx, info));
+        // Handle base relative relocation.
+        if (isRelativeReloc(rela->type())) {
+            *reinterpret_cast<elf::Config::AddrType*>(patchAddr) = ctx.virtualBase + rela->r_addend;
+            continue;
+        }
+
+        // Handle symbol relocation.
+        if (isSymbolReloc(rela->type())) {
+            DASHLE_TRY_EXPECTED_CONST(value, resolveSymbol(ctx, rela->symbolIndex()));
+            *reinterpret_cast<elf::Config::AddrType*>(patchAddr) = value;
+            continue;
+        }
+
+        return Unexpected(Error::InvalidRelocation);
     }
 
     return EXPECTED_VOID;

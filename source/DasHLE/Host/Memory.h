@@ -9,12 +9,12 @@ namespace dashle::host::memory {
 
 namespace flags {
 
-constexpr static usize READ = 0b0001;       // Read permission.
-constexpr static usize WRITE = 0b0010;      // Write permission.
-constexpr static usize EXEC = 0b0100;       // Execute permission.
+constexpr static usize PERM_READ = 0b0001;  // Read permission.
+constexpr static usize PERM_WRITE = 0b0010; // Write permission.
+constexpr static usize PERM_EXEC = 0b0100;  // Execute permission.
 constexpr static usize FORCE_HINT = 0b1000; // Fail if couldn't allocate at the specified address.
 
-constexpr static usize READ_WRITE = READ | WRITE;
+constexpr static usize PERM_READ_WRITE = PERM_READ | PERM_WRITE;
 constexpr static usize PERM_MASK = 0b0111;
 
 }; // namespace dashle::host::memory::flags
@@ -78,7 +78,7 @@ public:
     // Allocate memory, return the virtual address.
     Expected<const AllocatedBlock*> allocate(uaddr hint, usize size, usize flags);
 
-    Expected<const AllocatedBlock*> allocate(usize size, usize flags = flags::READ | flags::WRITE) {
+    Expected<const AllocatedBlock*> allocate(usize size, usize flags = flags::PERM_READ | flags::PERM_WRITE) {
         return allocate(invalidAddr(), size, flags);
     }
 

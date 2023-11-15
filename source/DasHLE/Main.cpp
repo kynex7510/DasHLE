@@ -12,6 +12,10 @@ int main() {
         return 1;
     }
 
+    // OnLoad
+    // nativeSetApkPath
+    // nativeInit
+
     const auto env = ctx.env();
     const auto binaryBase = env->binaryBase().value();
     DASHLE_LOG_LINE("Binary base: 0x{:X}", binaryBase);

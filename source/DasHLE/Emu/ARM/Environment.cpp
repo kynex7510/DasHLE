@@ -1,5 +1,8 @@
 #include "DasHLE/Emu/ARM/Environment.h"
 
+#include "dynarmic/frontend/A32/a32_ir_emitter.h"
+#include "dynarmic/frontend/A32/a32_types.h"
+
 using namespace dashle;
 using namespace dashle::emu::arm;
 
@@ -7,17 +10,17 @@ constexpr static usize PAGE_SIZE = 0x1000;
 
 // Environment
 
-uaddr Environment::virtualToHostForAccess(uaddr vaddr, usize flags) const {
+Expected<uaddr> Environment::virtualToHostChecked(uaddr vaddr, usize flags) const {
     if constexpr(DEBUG_MODE) {
-        flags &= host::memory::flags::READ_WRITE;
+        if (!(flags & host::memory::flags::PERM_EXEC))
+            //DASHLE_LOG_LINE("Accessing addr: 0x{:X}", vaddr);
+        flags &= host::memory::flags::PERM_MASK;
         const auto block = m_Mem->blockFromVAddr(vaddr);
         DASHLE_ASSERT(block);
         DASHLE_ASSERT(block.value()->flags & flags);
     }
 
-    const auto hostAddr = virtualToHost(vaddr);
-    DASHLE_ASSERT(hostAddr);
-    return hostAddr.value();
+    return virtualToHost(vaddr);
 }
 
 Expected<uaddr> Environment::virtualToHost(uaddr vaddr) const {
@@ -28,16 +31,35 @@ Expected<uaddr> Environment::virtualToHost(uaddr vaddr) const {
 }
 
 Expected<uaddr> Environment::resolveSymbol(const std::string& symbolName) {
-    // TODO
-    return 1u;
+    if (!m_ILTSize) {
+        DASHLE_TRY_EXPECTED_CONST(addr, m_Mem->findFreeAddr(0u));
+        m_ILTBase = addr;
+    }
+
+    const auto symValue = m_ILTBase + m_ILTSize;
+    DASHLE_LOG_LINE("Resolved symbol {} = 0x{:X}", symbolName, symValue);
+    m_ILT.insert({ symValue, symbolName });
+    m_ILTSize += 4;
+    return symValue;
 }
 
-void Environment::PreCodeTranslationHook(bool isThumb, dynarmic32::VAddr pc, dynarmic32::IREmitter& ir) {
-    // TODO: handle imports.
+bool Environment::PreCodeReadHook(bool isThumb, dynarmic32::VAddr pc, dynarmic32::IREmitter& ir) {
+    if (auto it = m_ILT.find(pc); it != m_ILT.end()) {
+        DASHLE_LOG_LINE("Attempted to call import \"{}\" (vaddr=0x{:X})", it->second, it->first);
+
+        const auto lr = ir.GetRegister(dynarmic32::Reg::LR);
+        ir.BXWritePC(lr);
+        //ir.current_location.AdvancePC(isThumb ? 2 : 4);
+        ir.SetTerm(dynarmic::IR::Term::ReturnToDispatch{});
+        return true;
+    }
+
+    return false;
 }
 
 std::optional<std::uint32_t> Environment::MemoryReadCode(dynarmic32::VAddr vaddr) {
-    const auto hostAddr = virtualToHost(vaddr);
+    //DASHLE_LOG_LINE("Exec @ 0x{:X}", vaddr);
+    const auto hostAddr = virtualToHostChecked(vaddr, host::memory::flags::PERM_EXEC);
     if (hostAddr)
         return *reinterpret_cast<const std::uint32_t*>(hostAddr.value());
 
@@ -45,41 +67,57 @@ std::optional<std::uint32_t> Environment::MemoryReadCode(dynarmic32::VAddr vaddr
 }
 
 std::uint8_t Environment::MemoryRead8(dynarmic32::VAddr vaddr) {
-    return *reinterpret_cast<const std::uint8_t*>(virtualToHostForAccess(vaddr, host::memory::flags::READ));
+    const auto addr = virtualToHostChecked(vaddr, host::memory::flags::PERM_READ);
+    DASHLE_ASSERT(addr);
+    return *reinterpret_cast<const std::uint8_t*>(addr.value());
 }
 
 std::uint16_t Environment::MemoryRead16(dynarmic32::VAddr vaddr) {
-    return *reinterpret_cast<const std::uint16_t*>(virtualToHostForAccess(vaddr, host::memory::flags::READ));
+    const auto addr = virtualToHostChecked(vaddr, host::memory::flags::PERM_READ);
+    DASHLE_ASSERT(addr);
+    return *reinterpret_cast<const std::uint16_t*>(addr.value());
 }
 
 std::uint32_t Environment::MemoryRead32(dynarmic32::VAddr vaddr) {
-    return *reinterpret_cast<const std::uint32_t*>(virtualToHostForAccess(vaddr, host::memory::flags::READ));
+    const auto addr = virtualToHostChecked(vaddr, host::memory::flags::PERM_READ);
+    DASHLE_ASSERT(addr);
+    return *reinterpret_cast<const std::uint32_t*>(addr.value());
 }
 
 std::uint64_t Environment::MemoryRead64(dynarmic32::VAddr vaddr) {
-    return *reinterpret_cast<const std::uint64_t*>(virtualToHostForAccess(vaddr, host::memory::flags::READ));
+    const auto addr = virtualToHostChecked(vaddr, host::memory::flags::PERM_READ);
+    DASHLE_ASSERT(addr);
+    return *reinterpret_cast<const std::uint64_t*>(addr.value());
 }
 
 void Environment::MemoryWrite8(dynarmic32::VAddr vaddr, std::uint8_t value) {
-    *reinterpret_cast<std::uint8_t*>(virtualToHostForAccess(vaddr, host::memory::flags::WRITE)) = value;
+    const auto addr = virtualToHostChecked(vaddr, host::memory::flags::PERM_WRITE);
+    DASHLE_ASSERT(addr);
+    *reinterpret_cast<std::uint8_t*>(addr.value()) = value;
 }
 
 void Environment::MemoryWrite16(dynarmic32::VAddr vaddr, std::uint16_t value) {
-    *reinterpret_cast<std::uint16_t*>(virtualToHostForAccess(vaddr, host::memory::flags::WRITE)) = value;
+    const auto addr = virtualToHostChecked(vaddr, host::memory::flags::PERM_WRITE);
+    DASHLE_ASSERT(addr);
+    *reinterpret_cast<std::uint16_t*>(addr.value()) = value;
 }
 
 void Environment::MemoryWrite32(dynarmic32::VAddr vaddr, std::uint32_t value) {
-    *reinterpret_cast<std::uint32_t*>(virtualToHostForAccess(vaddr, host::memory::flags::WRITE)) = value;
+    const auto addr = virtualToHostChecked(vaddr, host::memory::flags::PERM_WRITE);
+    DASHLE_ASSERT(addr);
+    *reinterpret_cast<std::uint32_t*>(addr.value()) = value;
 }
 
 void Environment::MemoryWrite64(dynarmic32::VAddr vaddr, std::uint64_t value) {
-    *reinterpret_cast<std::uint64_t*>(virtualToHostForAccess(vaddr, host::memory::flags::WRITE)) = value;
+    const auto addr = virtualToHostChecked(vaddr, host::memory::flags::PERM_WRITE);
+    DASHLE_ASSERT(addr);
+    *reinterpret_cast<std::uint64_t*>(addr.value()) = value;
 }
 
 bool Environment::IsReadOnlyMemory(dynarmic32::VAddr vaddr) {
     DASHLE_ASSERT(m_Mem);
     if (auto block = m_Mem->blockFromVAddr(vaddr))
-        return !(block.value()->flags & host::memory::flags::WRITE);
+        return !(block.value()->flags & host::memory::flags::PERM_WRITE);
 
     return true;
 }
@@ -104,7 +142,7 @@ Environment::Environment(std::unique_ptr<host::memory::MemoryManager> mem, usize
 
     // Allocate stack.
     if (stackSize) {
-        auto ret = m_Mem->allocate(m_Mem->maxMemory() - stackSize, stackSize, host::memory::flags::READ_WRITE);
+        auto ret = m_Mem->allocate(m_Mem->maxMemory() - stackSize, stackSize, host::memory::flags::PERM_READ_WRITE);
         DASHLE_ASSERT(ret);
         m_StackBase = ret.value()->virtualBase;
         m_StackTop = m_StackBase.value() + stackSize;
@@ -134,7 +172,7 @@ Expected<void> Environment::loadBinary(const std::span<const u8> buffer) {
     for (const auto segment : loadSegments) {
         const auto allocBase = elf::getSegmentAllocBase(segment, binaryBase);
         DASHLE_TRY_EXPECTED_CONST(allocSize, elf::getSegmentAllocSize(segment));
-        DASHLE_TRY_EXPECTED_CONST(block, m_Mem->allocate(allocBase, allocSize, host::memory::flags::READ_WRITE | host::memory::flags::FORCE_HINT));
+        DASHLE_TRY_EXPECTED_CONST(block, m_Mem->allocate(allocBase, allocSize, host::memory::flags::PERM_READ_WRITE | host::memory::flags::FORCE_HINT));
 
         const auto offset = segment->p_vaddr - (block->virtualBase - binaryBase);
         std::copy(buffer.data() + segment->p_offset,

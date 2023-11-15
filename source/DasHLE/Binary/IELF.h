@@ -512,7 +512,7 @@ Expected<std::string> getSymbolName(const typename CFG::HeaderType* header, type
         return reinterpret_cast<const char*>(base + strtab->d_un.d_ptr + symtab[index].st_name);
     }
 
-    return std::string();
+    return Unexpected(Error::InvalidIndex);
 }
 
 struct FuncArrayInfo {
