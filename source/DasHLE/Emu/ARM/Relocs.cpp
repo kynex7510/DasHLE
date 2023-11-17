@@ -66,6 +66,7 @@ static Expected<void> handleRelaArray(const RelocationContext& ctx, const RelaTy
         // Handle symbol relocation.
         if (isSymbolReloc(rela->type())) {
             DASHLE_TRY_EXPECTED_CONST(value, resolveSymbol(ctx, rela->symbolIndex()));
+            // We ignore the addend.
             *reinterpret_cast<elf::Config::AddrType*>(patchAddr) = value;
             continue;
         }

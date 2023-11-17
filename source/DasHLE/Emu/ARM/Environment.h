@@ -36,7 +36,6 @@ class Environment : public dynarmic32::UserCallbacks, public RelocationDelegate 
     std::vector<uaddr> m_Finalizers;
 
     Expected<uaddr> virtualToHostChecked(uaddr vaddr, usize flags) const;
-    Expected<void> populateILT();
 
     /* Relocation callbacks */
 

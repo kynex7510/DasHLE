@@ -49,12 +49,11 @@ bool Environment::PreCodeReadHook(bool isThumb, dynarmic32::VAddr pc, dynarmic32
 
         const auto lr = ir.GetRegister(dynarmic32::Reg::LR);
         ir.BXWritePC(lr);
-        //ir.current_location.AdvancePC(isThumb ? 2 : 4);
         ir.SetTerm(dynarmic::IR::Term::ReturnToDispatch{});
-        return true;
+        return false;
     }
 
-    return false;
+    return true;
 }
 
 std::optional<std::uint32_t> Environment::MemoryReadCode(dynarmic32::VAddr vaddr) {
