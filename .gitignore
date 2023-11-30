@@ -1,4 +1,6 @@
 .vscode
 build
 app
-libcocos2dcpp.so.idb
+world
+og21.idb
+world64.i64

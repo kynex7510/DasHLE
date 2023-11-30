@@ -1,16 +1,14 @@
-#ifndef _DASHLE_BINARY_IELF_H
-#define _DASHLE_BINARY_IELF_H
+#ifndef _DASHLE_BINARY_ELF_H
+#define _DASHLE_BINARY_ELF_H
 
-#include "DasHLE/Host/Memory.h"
+#include "DasHLE/Base.h"
 
 #include <span>
 #include <vector>
 #include <string>
 #include <algorithm>
 
-#define IELF_ASSERT_CONFIG(cfg) static_assert(::dashle::binary::ielf::ConfigType<cfg>)
-
-namespace dashle::binary::ielf {
+namespace dashle::binary::elf {
 
 namespace constants {
 
@@ -31,7 +29,6 @@ constexpr static auto ELFDATA2MSB = 2;
 
 constexpr static auto ET_DYN = 3;
 
-constexpr static auto EM_NONE = 0;
 constexpr static auto EM_ARM = 40;
 constexpr static auto EM_AARCH64 = 183;
 
@@ -64,7 +61,16 @@ constexpr static auto PF_X = (1 << 0);
 constexpr static auto PF_W = (1 << 1);
 constexpr static auto PF_R = (1 << 2);
 
-} // namespace dashle::binary::ielf::constants
+constexpr static auto R_ARM_ABS32 = 2;
+constexpr static auto R_ARM_GLOB_DAT = 21;
+constexpr static auto R_ARM_JUMP_SLOT = 22;
+constexpr static auto R_ARM_RELATIVE = 23;
+constexpr static auto R_AARCH64_ABS64 = 257;
+constexpr static auto R_AARCH64_GLOB_DAT = 1025;
+constexpr static auto R_AARCH64_JUMP_SLOT = 1026;
+constexpr static auto R_AARCH64_RELATIVE = 1027;
+
+} // namespace dashle::binary::elf::constants
 
 using namespace constants;
 
@@ -367,9 +373,18 @@ struct ConfigBE {
     static constexpr auto DATA_ENCODING = ELFDATA2MSB;
 };
 
+inline Optional<usize> detectArch(const std::span<const u8> buffer) {
+    if (buffer.size() >= sizeof(Elf32_Ehdr)) {
+        const auto header = reinterpret_cast<const Elf32_Ehdr*>(buffer.data());
+        return header->e_machine;
+    }
+
+    return {};
+}
+
 template <ConfigType CFG>
 Expected<const typename CFG::HeaderType*> getHeader(const std::span<const u8> buffer) {
-    auto header = reinterpret_cast<const CFG::HeaderType*>(buffer.data());
+    const auto header = reinterpret_cast<const CFG::HeaderType*>(buffer.data());
 
     // Check size.
     if (buffer.size() < sizeof(typename CFG::HeaderType) || buffer.size() < header->e_ehsize)
@@ -550,6 +565,6 @@ Optional<FuncArrayInfo> getFiniArrayInfo(const typename CFG::HeaderType* header)
     return {};
 }
 
-} // namespace dashle::binary::ielf
+} // namespace dashle::binary::elf
 
-#endif /* _DASHLE_BINARY_IELF_H */
+#endif /* _DASHLE_BINARY_ELF_H */

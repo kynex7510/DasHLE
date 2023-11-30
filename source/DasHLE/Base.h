@@ -112,6 +112,24 @@ enum class Error {
 };
 
 template <typename T>
+concept Pointerable = std::is_pointer_v<T>;
+
+template <typename Self, typename T>
+struct DeducedConstImpl {
+    using Type = std::conditional_t<std::is_const_v<Self>, std::add_const_t<T>, std::remove_const_t<T>>;
+};
+
+template <typename Self, Pointerable T>
+struct DeducedConstImpl<Self, T> {
+    using Type = std::conditional_t<std::is_const_v<Self>,
+        std::add_pointer_t<std::add_const_t<std::remove_pointer_t<T>>>,
+        std::add_pointer_t<std::remove_const_t<std::remove_pointer_t<T>>>>;
+};
+
+template <typename Self, typename T>
+using DeducedConst = typename DeducedConstImpl<Self, T>::Type;
+
+template <typename T>
 using Expected = std::expected<T, Error>;
 using Unexpected = std::unexpected<Error>;
 
@@ -146,7 +164,7 @@ std::string errorAsString(Error error);
 } // namespace dashle
 
 template<> 
-struct std::formatter<dashle::Error> { 
+struct std::formatter<dashle::Error> {
   constexpr auto parse(std::format_parse_context& ctx) { 
     return ctx.begin(); 
   }
