@@ -12,8 +12,8 @@ namespace dashle::guest {
 
 constexpr static auto EXEC_SUCCESS = static_cast<dynarmic::HaltReason>(0u);
 
-struct Context {
-    virtual ~Context() {}
+struct GuestContext {
+    virtual ~GuestContext() {}
     virtual Expected<void> loadBinary(const std::span<const u8> buffer) = 0;
     virtual void reset() = 0;
     virtual dynarmic::HaltReason execute() = 0;
@@ -27,8 +27,8 @@ struct Context {
     virtual void dump() const {}
 };
 
-Expected<std::unique_ptr<Context>> createContext(const host::fs::path& path);
-Expected<std::unique_ptr<Context>> createContext(const std::span<const u8> buffer);
+Expected<std::unique_ptr<GuestContext>> createContext(const host::fs::path& path);
+Expected<std::unique_ptr<GuestContext>> createContext(const std::span<const u8> buffer);
 
 } // namespace dashle::guest
 

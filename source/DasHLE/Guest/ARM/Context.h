@@ -10,7 +10,7 @@
 
 namespace dashle::guest::arm {
 
-class ARMContext final : public Context {
+class ARMContext final : public GuestContext {
     std::unique_ptr<ARMEnvironment> m_Env;
     std::unique_ptr<dynarmic::ExclusiveMonitor> m_ExMon;
     std::unique_ptr<dynarmic32::Jit> m_Jit;

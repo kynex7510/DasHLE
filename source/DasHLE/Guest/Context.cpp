@@ -2,18 +2,19 @@
 #include "DasHLE/Guest/ARM/Context.h"
 
 using namespace dashle;
+using namespace dashle::guest;
 
-// Context
+// GuestContext
 
-Expected<std::unique_ptr<dashle::guest::Context>> dashle::guest::createContext(const host::fs::path& path) {
+Expected<std::unique_ptr<GuestContext>> dashle::guest::createContext(const host::fs::path& path) {
     std::vector<u8> buffer;
     return host::fs::readFile(path, buffer).and_then([&buffer](){
         return createContext(buffer);
     });
 }
 
-Expected<std::unique_ptr<dashle::guest::Context>> dashle::guest::createContext(const std::span<const u8> buffer) {
-    std::unique_ptr<Context> ctx;
+Expected<std::unique_ptr<GuestContext>> dashle::guest::createContext(const std::span<const u8> buffer) {
+    std::unique_ptr<GuestContext> ctx;
 
     DASHLE_TRY_OPTIONAL_CONST(arch, binary::elf::detectArch(buffer), Error::InvalidArch);
     switch (arch) {
