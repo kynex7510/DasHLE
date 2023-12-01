@@ -5,6 +5,8 @@
 using namespace dashle;
 using namespace dashle::guest::arm;
 
+namespace dynarmic_ir = Dynarmic::IR;
+
 // ARMEnvironment
 
 Expected<uaddr> ARMEnvironment::virtualToHostChecked(uaddr vaddr, usize flags) const {
@@ -18,14 +20,16 @@ Expected<uaddr> ARMEnvironment::virtualToHostChecked(uaddr vaddr, usize flags) c
     return virtualToHost(vaddr);
 }
 
-Expected<uaddr> ARMEnvironment::virtualToHost(uaddr vaddr) const {
-    DASHLE_ASSERT(m_Mem);
-    return m_Mem->blockFromVAddr(vaddr).and_then([vaddr](const host::memory::AllocatedBlock* block) {
-        return host::memory::virtualToHost(*block, vaddr);
-    });
-}
-
 bool ARMEnvironment::PreCodeReadHook(bool isThumb, dynarmic32::VAddr pc, dynarmic32::IREmitter& ir) {
+    if (auto it = m_ILTEntries.find(pc); it != m_ILTEntries.end()) {
+        DASHLE_LOG_LINE("Called codegen for \"{}\" (pc=0x{:X})", it->second, it->first);
+
+        // TODO: codegen imports.
+        ir.BXWritePC(ir.GetRegister(regs::asEnum(regs::LR)));
+        ir.SetTerm(dynarmic_ir::Term::ReturnToDispatch{});
+        return false;
+    }
+
     return true;
 }
 
@@ -129,4 +133,26 @@ ARMEnvironment::ARMEnvironment(std::unique_ptr<host::memory::MemoryManager> mem,
         host::memory::flags::PERM_READ_WRITE | host::memory::flags::FORCE_HINT));
     m_StackBase = stackBlock->virtualBase;
     m_StackTop = m_StackBase + stackBlock->size;
+}
+
+Expected<uaddr> ARMEnvironment::virtualToHost(uaddr vaddr) const {
+    DASHLE_ASSERT(m_Mem);
+    return m_Mem->blockFromVAddr(vaddr).and_then([vaddr](const host::memory::AllocatedBlock* block) {
+        return host::memory::virtualToHost(*block, vaddr);
+    });
+}
+
+Expected<void> ARMEnvironment::allocateILT(usize numEntries) {
+    // TODO: page prot?
+    DASHLE_TRY_EXPECTED_CONST(iltBlock, m_Mem->allocate(numEntries * sizeof(ELFConfig::AddrType), host::memory::flags::PERM_READ_WRITE));
+    m_ILTBase = iltBlock->virtualBase;
+    m_ILTNumEntries = numEntries;
+    return EXPECTED_VOID;
+}
+
+uaddr ARMEnvironment::insertILTEntry(const std::string& symbolName) {
+    DASHLE_ASSERT(m_ILTEntries.size() < m_ILTNumEntries);
+    const auto vaddr = m_ILTBase + (m_ILTEntries.size() * sizeof(ELFConfig::AddrType));
+    m_ILTEntries.insert({ vaddr, symbolName });
+    return vaddr;
 }

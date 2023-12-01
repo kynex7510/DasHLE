@@ -12,24 +12,6 @@ enum class Version {
     Arm64_v8a,   // v8
 };
 
-/*
-
-// Handle base relative relocation.
-        if (isRelativeReloc(rela->type())) {
-            *reinterpret_cast<AddrType*>(patchAddr) = ctx.virtualBase + rela->r_addend;
-            continue;
-        }
-
-        // Handle symbol relocation.
-        if (isSymbolReloc(rela->type())) {
-            DASHLE_TRY_EXPECTED_CONST(value, reloc_impl::resolveSymbol(ctx, rela->symbolIndex()));
-            // We ignore the addend.
-            *reinterpret_cast<AddrType*>(patchAddr) = value;
-            continue;
-        }
-
-*/
-
 enum class RelocKind {
     Relative,
     Symbol,
@@ -101,7 +83,7 @@ class Binary final {
             const auto rel = &relArray[i];
 
             if (isRelativeReloc(rel->type())) {
-                m_Relocs.push_back({
+                m_Relocs.push_back(RelocInfo {
                     .patchOffset = rel->r_offset,
                     .addend = 0,
                     .kind = RelocKind::Relative,
@@ -110,8 +92,8 @@ class Binary final {
             }
 
             if (isSymbolReloc(rel->type())) {
-                DASHLE_TRY_EXPECTED_CONST(symbolName, elf::getSymbolName(header(), rel->symbolIndex()));
-                m_Relocs.push_back({
+                DASHLE_TRY_EXPECTED_CONST(symbolName, elf::getSymbolName<CFG>(header(), rel->symbolIndex()));
+                m_Relocs.push_back(RelocInfo {
                     .patchOffset = rel->r_offset,
                     .addend = 0,
                     .kind = RelocKind::Symbol,
@@ -131,7 +113,7 @@ class Binary final {
             const auto rela = &relaArray[i];
 
             if (isRelativeReloc(rela->type())) {
-                m_Relocs.push_back({
+                m_Relocs.push_back(RelocInfo {
                     .patchOffset = rela->r_offset,
                     .addend = rela->r_addend,
                     .kind = RelocKind::Relative,
@@ -139,9 +121,9 @@ class Binary final {
                 continue;
             }
 
-            if (isSymbolReloc(rel->type())) {
-                DASHLE_TRY_EXPECTED_CONST(symbolName, elf::getSymbolName(header(), rela->symbolIndex()));
-                m_Relocs.push_back({
+            if (isSymbolReloc(rela->type())) {
+                DASHLE_TRY_EXPECTED_CONST(symbolName, elf::getSymbolName<CFG>(header(), rela->symbolIndex()));
+                m_Relocs.push_back(RelocInfo {
                     .patchOffset = rela->r_offset,
                     .addend = rela->r_addend,
                     .kind = RelocKind::Symbol,
@@ -194,13 +176,13 @@ class Binary final {
 
         if (jmprelEntryType.value()->d_un.d_val == elf::DT_REL) {
             const auto jmprelArray = reinterpret_cast<CFG::RelType*>(base() + jmprelEntry.value()->d_un.d_ptr);
-            const usize size = jmprelEntrySize.value()->d_un.d_val / sizeof(CFG::RelType);   
+            const usize size = jmprelEntrySize.value()->d_un.d_val / sizeof(typename CFG::RelType);   
             return visitRelArray(jmprelArray, size);
         }
 
         if (jmprelEntryType.value()->d_un.d_val == elf::DT_RELA) {
-            const auto jmprelArray = reinterpret_cast<CFG::RelaType*>(base + jmprelEntry.value()->d_un.d_ptr);
-            const usize size = jmprelEntrySize.value()->d_un.d_val / sizeof(CFG::RelaType);
+            const auto jmprelArray = reinterpret_cast<CFG::RelaType*>(base() + jmprelEntry.value()->d_un.d_ptr);
+            const usize size = jmprelEntrySize.value()->d_un.d_val / sizeof(typename CFG::RelaType);
             return visitRelaArray(jmprelArray, size);
         }
 
@@ -208,9 +190,9 @@ class Binary final {
     }
 
     Expected<void> visitRelocations() {
-        return visitRel().and_then([] {
+        return visitRel().and_then([this] {
             return visitRela();
-        }).and_then([] {
+        }).and_then([this] {
             return visitJmprel();
         });
     }
@@ -222,7 +204,7 @@ public:
         DASHLE_ASSERT(visitRelocations());
     }
 
-    const std::vector<RelocInfo>& relocs() const { return m_Relocs; }
+    const std::vector<RelocInfo>& relocs() { return m_Relocs; }
 
     static inline const auto& wrapPermissionFlags = binary::wrapPermissionFlags<CFG>;
     static inline const auto& unwrapPermissionFlags = binary::unwrapPermissionFlags<CFG>;

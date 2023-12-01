@@ -24,11 +24,11 @@ struct Context {
     virtual void invalidateCache(uaddr addr, usize size) = 0;
     virtual void setRegister(usize id, u64 value) = 0;
     virtual u64 getRegister(usize id) const = 0;
-    virtual void dump() const = 0;
+    virtual void dump() const {}
 };
 
-Expected<std::unique_ptr<Context>> createContextFromBinary(const host::fs::path& path);
-Expected<std::unique_ptr<Context>> createContextFromBuffer(const std::span<const u8> buffer);
+Expected<std::unique_ptr<Context>> createContext(const host::fs::path& path);
+Expected<std::unique_ptr<Context>> createContext(const std::span<const u8> buffer);
 
 } // namespace dashle::guest
 

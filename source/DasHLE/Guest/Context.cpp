@@ -1,18 +1,18 @@
 #include "DasHLE/Binary/ELF.h"
-#include "DasHLE/Guest/ARM/ARMContext.h"
+#include "DasHLE/Guest/ARM/Context.h"
 
 using namespace dashle;
 
 // Context
 
-Expected<std::unique_ptr<dashle::guest::Context>> dashle::guest::createContextFromBinary(const host::fs::path& path) {
+Expected<std::unique_ptr<dashle::guest::Context>> dashle::guest::createContext(const host::fs::path& path) {
     std::vector<u8> buffer;
     return host::fs::readFile(path, buffer).and_then([&buffer](){
-        return createContextFromBuffer(buffer);
+        return createContext(buffer);
     });
 }
 
-Expected<std::unique_ptr<dashle::guest::Context>> dashle::guest::createContextFromBuffer(const std::span<const u8> buffer) {
+Expected<std::unique_ptr<dashle::guest::Context>> dashle::guest::createContext(const std::span<const u8> buffer) {
     std::unique_ptr<Context> ctx;
 
     DASHLE_TRY_OPTIONAL_CONST(arch, binary::elf::detectArch(buffer), Error::InvalidArch);

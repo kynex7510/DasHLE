@@ -1,17 +1,10 @@
-#include "dynarmic/frontend/A32/a32_types.h"
-
-#include "DasHLE/Binary/Binary.h"
 #include "DasHLE/Guest/ARM/Context.h"
 
 using namespace dashle;
 using namespace dashle::guest;
 using namespace dashle::guest::arm;
 
-struct ARMConfig : binary::elf::Config32, binary::elf::ConfigLE {
-    constexpr static auto ARCH = binary::elf::constants::EM_ARM;
-};
-
-using Binary = binary::Binary<ARMConfig>;
+using Binary = binary::Binary<arm::ELFConfig>;
 
 constexpr static usize STACK_SIZE = 1024 * 1024; // 1MB
 
@@ -98,24 +91,28 @@ Expected<void> ARMContext::loadBinary(const std::span<const u8> buffer) {
     }
 
     // Handle relocations.
+    const auto& relocs = binary.relocs();
+    DASHLE_TRY_EXPECTED_VOID(env->allocateILT(relocs.size()));
+
     for (const auto& reloc : binary.relocs()) {
         DASHLE_TRY_EXPECTED_CONST(patchAddr, env->virtualToHost(binaryBase + reloc.patchOffset));
 
         if (reloc.kind == binary::RelocKind::Relative) {
-            *reinterpret_cast<uaddr*>(patchAddr) = binaryBase + reloc.addend;
+            if (reloc.addend)
+                *reinterpret_cast<uaddr*>(patchAddr) = binaryBase + reloc.addend;
+            else
+                *reinterpret_cast<uaddr*>(patchAddr) += binaryBase;
             continue;
         }
 
         if (reloc.kind == binary::RelocKind::Symbol) {
-            // DASHLE_TRY_EXPECTED_CONST(value, reloc_impl::resolveSymbol(ctx, rela->symbolIndex()));
+            DASHLE_ASSERT_WRAPPER_CONST(symbolName, reloc.symbolName);
             // We ignore the addend.
-            // TODO
-            auto value = 0;
-            *reinterpret_cast<uaddr*>(patchAddr) = value;
+            *reinterpret_cast<uaddr*>(patchAddr) = env->insertILTEntry(symbolName);
             continue;
         }
 
-        DASHLE_UNREACHABLE("Invalid relocation kind");
+        DASHLE_UNREACHABLE("Invalid relocation kind!");
     }
 
     // Set memory permissions.
@@ -128,7 +125,7 @@ Expected<void> ARMContext::loadBinary(const std::span<const u8> buffer) {
     if (initWrapper) {
         const auto& initArrayInfo = initWrapper.value();
         DASHLE_TRY_EXPECTED_CONST(hostAddr, env->virtualToHost(binaryBase + initArrayInfo.offset));
-        const auto initArray = reinterpret_cast<const ARMConfig::AddrType*>(hostAddr);
+        const auto initArray = reinterpret_cast<const ELFConfig::AddrType*>(hostAddr);
         m_Initializers.clear();
         for (auto i = 0u; i < initArrayInfo.size; ++i) {
             const auto addr = initArray[i];
@@ -141,7 +138,7 @@ Expected<void> ARMContext::loadBinary(const std::span<const u8> buffer) {
     if (finiWrapper) {
         const auto& finiArrayInfo = finiWrapper.value();
         DASHLE_TRY_EXPECTED_CONST(hostAddr, env->virtualToHost(binaryBase + finiArrayInfo.offset));
-        const auto finiArray = reinterpret_cast<const ARMConfig::AddrType*>(hostAddr);
+        const auto finiArray = reinterpret_cast<const ELFConfig::AddrType*>(hostAddr);
         m_Finalizers.clear();
         for (auto i = 0u; i < finiArrayInfo.size; ++i) {
             const auto addr = finiArray[i];
@@ -213,7 +210,7 @@ void ARMContext::setRegister(usize id, u64 value) {
             return;
     }
 
-    DASHLE_UNREACHABLE("Invalid ID");
+    DASHLE_UNREACHABLE("Invalid ID!");
 }
 
 u64 ARMContext::getRegister(usize id) const {
@@ -229,7 +226,7 @@ u64 ARMContext::getRegister(usize id) const {
             return m_Jit->Fpscr();
     }
 
-    DASHLE_UNREACHABLE("Invalid ID");
+    DASHLE_UNREACHABLE("Invalid ID!");
 }
 
 void ARMContext::dump() const {

@@ -2,7 +2,12 @@
 #define _DASHLE_GUEST_ARM_ENVIRONMENT_H
 
 #include "dynarmic/interface/A32/a32.h"
+#include "dynarmic/frontend/A32/a32_types.h"
+
 #include "DasHLE/Host/Memory.h"
+#include "DasHLE/Binary/Binary.h"
+
+#include <unordered_map>
 
 namespace dashle {
 namespace dynarmic32 = Dynarmic::A32;
@@ -10,12 +15,51 @@ namespace dynarmic32 = Dynarmic::A32;
 
 namespace dashle::guest::arm {
 
+struct ELFConfig : binary::elf::Config32, binary::elf::ConfigLE {
+    constexpr static auto ARCH = binary::elf::constants::EM_ARM;
+};
+
+namespace regs {
+
+constexpr static auto R0 = static_cast<usize>(dynarmic32::Reg::R0);
+constexpr static auto R1 = static_cast<usize>(dynarmic32::Reg::R1);
+constexpr static auto R2 = static_cast<usize>(dynarmic32::Reg::R2);
+constexpr static auto R3 = static_cast<usize>(dynarmic32::Reg::R3);
+constexpr static auto R4 = static_cast<usize>(dynarmic32::Reg::R4);
+constexpr static auto R5 = static_cast<usize>(dynarmic32::Reg::R5);
+constexpr static auto R6 = static_cast<usize>(dynarmic32::Reg::R6);
+constexpr static auto R7 = static_cast<usize>(dynarmic32::Reg::R7);
+constexpr static auto R8 = static_cast<usize>(dynarmic32::Reg::R8);
+constexpr static auto R9 = static_cast<usize>(dynarmic32::Reg::R9);
+constexpr static auto R10 = static_cast<usize>(dynarmic32::Reg::R10);
+constexpr static auto R11 = static_cast<usize>(dynarmic32::Reg::R11);
+constexpr static auto R12 = static_cast<usize>(dynarmic32::Reg::R12);
+constexpr static auto R13 = static_cast<usize>(dynarmic32::Reg::R13);
+constexpr static auto R14 = static_cast<usize>(dynarmic32::Reg::R14);
+constexpr static auto R15 = static_cast<usize>(dynarmic32::Reg::R15);
+
+constexpr static auto SP = R13;
+constexpr static auto LR = R14;
+constexpr static auto PC = R15;
+constexpr static auto CPSR = R15 + 1;
+constexpr static auto FPSCR = R15 + 2;
+
+inline dynarmic32::Reg asEnum(usize reg) {
+    DASHLE_ASSERT(reg <= R15);
+    return static_cast<dynarmic32::Reg>(reg);
+}
+
+} // namespace dashle::guest::arm::regs
+
 constexpr static usize PAGE_SIZE = 0x1000; // 4KB
 
 class ARMEnvironment final : public dynarmic32::UserCallbacks {
     std::unique_ptr<host::memory::MemoryManager> m_Mem;
     uaddr m_StackBase = 0;
     uaddr m_StackTop = 0;
+    uaddr m_ILTBase = 0;
+    usize m_ILTNumEntries = 0;
+    std::unordered_map<usize, std::string> m_ILTEntries;
 
     Expected<uaddr> virtualToHostChecked(uaddr vaddr, usize flags) const;
 
@@ -57,17 +101,28 @@ class ARMEnvironment final : public dynarmic32::UserCallbacks {
 
 public:
     ARMEnvironment(std::unique_ptr<host::memory::MemoryManager> mem, usize stackSize);
-    virtual ~ARMEnvironment() {}
+    virtual ~ARMEnvironment() noexcept {}
 
+    // TODO: explicit object parameters aren't widely supported yet *sigh*.
+
+    /*
     template <typename Self>
     DeducedConst<Self, host::memory::MemoryManager*> memoryManager(this Self&& self) {
         return self.m_Mem.get();
     }
+    */
+
+    host::memory::MemoryManager* memoryManager() { return m_Mem.get(); }
 
     uaddr stackBase() const { return m_StackBase; }
     uaddr stackTop() const { return m_StackTop; }
 
     Expected<uaddr> virtualToHost(uaddr vaddr) const;
+
+    /* Import Lookup Table */
+
+    Expected<void> allocateILT(usize numEntries);
+    uaddr insertILTEntry(const std::string& symbolName);
 };
 
 } // namespace dashle::guest::arm

@@ -27,9 +27,9 @@ include_directories(source)
 
 set(DasHLE_SOURCES
     ${CMAKE_SOURCE_DIR}/source/DasHLE/Base.cpp
-    ${CMAKE_SOURCE_DIR}/source/DasHLE/Emu/ARM/EmuContext.cpp
-    ${CMAKE_SOURCE_DIR}/source/DasHLE/Emu/ARM/Environment.cpp
-    ${CMAKE_SOURCE_DIR}/source/DasHLE/Emu/ARM/Relocs.cpp
+    ${CMAKE_SOURCE_DIR}/source/DasHLE/Guest/ARM/ARMContext.cpp
+    ${CMAKE_SOURCE_DIR}/source/DasHLE/Guest/ARM/ARMEnvironment.cpp
+    ${CMAKE_SOURCE_DIR}/source/DasHLE/Guest/Context.cpp
     ${CMAKE_SOURCE_DIR}/source/DasHLE/Host/Memory.cpp
     ${CMAKE_SOURCE_DIR}/source/DasHLE/Host/Linux/Base.cpp
 )
