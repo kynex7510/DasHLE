@@ -24,6 +24,8 @@ static std::unique_ptr<host::memory::MemoryManager> makeDefaultMem() {
 void ARMContext::initJit() {
     auto env = environment();
 
+    env->m_Ctx = this;
+
     // Build config.
     dynarmic32::UserConfig cfg;
     cfg.callbacks = env;
@@ -45,10 +47,8 @@ void ARMContext::initJit() {
 
     // Run initializers.
     for (auto vaddr : m_Initializers) {
-        DASHLE_LOG_LINE("Calling initializer @ 0x{:X}...", vaddr);
-        if (auto reason = execute(vaddr); reason != dynarmic::HaltReason::Step) {
-            DASHLE_LOG_LINE("Init call failed (vaddr={}, reason={})", vaddr, static_cast<u32>(reason));
-            return;
+        if (auto reason = execute(vaddr); reason != EXEC_SUCCESS) {
+            DASHLE_UNREACHABLE("Init call failed (vaddr=0x{:X}, reason={})", vaddr, static_cast<u32>(reason));
         }
     }
 
@@ -75,17 +75,19 @@ Expected<void> ARMContext::loadBinary(const std::span<const u8> buffer) {
     // Allocate and map segments.
     std::vector<std::pair<uaddr, usize>> secBases;
     DASHLE_TRY_EXPECTED_CONST(loadSegments, binary.segments(binary::elf::PT_LOAD));
-    DASHLE_TRY_EXPECTED(binaryBase, mem->findFreeAddr(0u));
+    // TODO: ensure this is page aligned.
+    DASHLE_TRY_EXPECTED_CONST(binaryBase, mem->findFreeAddr(0u));
 
     for (const auto segment : loadSegments) {
-        const auto allocBase = binary.segmentAllocBase(segment, binaryBase);
+        DASHLE_TRY_EXPECTED_CONST(allocBase, binary.segmentAllocBase(segment));
         DASHLE_TRY_EXPECTED_CONST(allocSize, binary.segmentAllocSize(segment));
-        DASHLE_TRY_EXPECTED_CONST(block, mem->allocate(allocBase, allocSize, host::memory::flags::PERM_READ_WRITE | host::memory::flags::FORCE_HINT));
+        DASHLE_TRY_EXPECTED_CONST(block, mem->allocate(binaryBase + allocBase, allocSize, host::memory::flags::PERM_READ_WRITE | host::memory::flags::FORCE_HINT));
 
-        const auto offset = segment->p_vaddr - (block->virtualBase - binaryBase);
+        // Host offset is the memory offset for the first byte, relative to the allocation base.
+        DASHLE_ASSERT(segment->p_filesz < block->size);
         std::copy(buffer.data() + segment->p_offset,
             buffer.data() + segment->p_offset + segment->p_filesz,
-            reinterpret_cast<u8*>(block->hostBase) + offset);
+            reinterpret_cast<u8*>(block->hostBase) + (segment->p_vaddr - allocBase));
 
         secBases.push_back({ block->virtualBase, binary.wrapPermissionFlags(segment->p_flags) });
     }
@@ -99,16 +101,16 @@ Expected<void> ARMContext::loadBinary(const std::span<const u8> buffer) {
 
         if (reloc.kind == binary::RelocKind::Relative) {
             if (reloc.addend)
-                *reinterpret_cast<uaddr*>(patchAddr) = binaryBase + reloc.addend;
+                *reinterpret_cast<ELFConfig::AddrType*>(patchAddr) = binaryBase + reloc.addend;
             else
-                *reinterpret_cast<uaddr*>(patchAddr) += binaryBase;
+                *reinterpret_cast<ELFConfig::AddrType*>(patchAddr) += binaryBase;
             continue;
         }
 
         if (reloc.kind == binary::RelocKind::Symbol) {
             DASHLE_ASSERT_WRAPPER_CONST(symbolName, reloc.symbolName);
             // We ignore the addend.
-            *reinterpret_cast<uaddr*>(patchAddr) = env->insertILTEntry(symbolName);
+            *reinterpret_cast<ELFConfig::AddrType*>(patchAddr) = env->insertILTEntry(symbolName);
             continue;
         }
 

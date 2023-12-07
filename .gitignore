@@ -2,5 +2,5 @@
 build
 app
 world
-og21.idb
-world64.i64
+og21.*
+world64.*

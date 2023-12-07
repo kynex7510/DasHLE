@@ -15,6 +15,8 @@ namespace dynarmic32 = Dynarmic::A32;
 
 namespace dashle::guest::arm {
 
+class ARMContext;
+
 struct ELFConfig : binary::elf::Config32, binary::elf::ConfigLE {
     constexpr static auto ARCH = binary::elf::constants::EM_ARM;
 };
@@ -86,10 +88,7 @@ class ARMEnvironment final : public dynarmic32::UserCallbacks {
         DASHLE_UNREACHABLE("Interpreter invoked (pc={}, numInstructions={})", pc, numInstructions);
     }
 
-    void CallSVC(u32 swi) override {
-        // TODO: support SVC.
-        DASHLE_UNREACHABLE("Unimplemented SVC call (swi={})", swi);
-    }
+    void CallSVC(u32 swi) override;
 
     void ExceptionRaised(dynarmic32::VAddr pc, dynarmic32::Exception exception) override {
         // TODO: handle exceptions.
@@ -100,6 +99,8 @@ class ARMEnvironment final : public dynarmic32::UserCallbacks {
     std::uint64_t GetTicksRemaining() override { return static_cast<u64>(-1); }
 
 public:
+    ARMContext* m_Ctx = nullptr;
+
     ARMEnvironment(std::unique_ptr<host::memory::MemoryManager> mem, usize stackSize);
     virtual ~ARMEnvironment() noexcept {}
 
