@@ -21,7 +21,7 @@ class ARMContext final : public GuestContext {
     void setPC(uaddr addr);
 
 public:
-    ARMContext();
+    ARMContext(std::unique_ptr<host::memory::MemoryManager> mem);
 
     Expected<void> loadBinary(const std::span<const u8> buffer) override;
     void reset() override;

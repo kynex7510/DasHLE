@@ -13,12 +13,6 @@ constexpr static u32 cpsrThumbDisable(u32 cpsr) { return cpsr & ~(0x30u); }
 constexpr static bool isThumb(uaddr addr) { return addr & 1u; }
 constexpr static uaddr clearThumb(uaddr addr) { return addr & ~(1u); }
 
-static std::unique_ptr<host::memory::MemoryManager> makeDefaultMem() {
-    return std::make_unique<host::memory::MemoryManager>(
-        std::make_unique<host::memory::HostAllocator>(),
-        static_cast<usize>(1u) << 32);
-}
-
 // ARMContext
 
 void ARMContext::initJit() {
@@ -62,8 +56,8 @@ void ARMContext::setPC(uaddr addr) {
     m_Jit->Regs()[regs::PC] = clearThumb(addr);
 }
 
-ARMContext::ARMContext() {
-    m_Env = std::make_unique<ARMEnvironment>(makeDefaultMem(), STACK_SIZE);
+ARMContext::ARMContext(std::unique_ptr<host::memory::MemoryManager> mem) {
+    m_Env = std::make_unique<ARMEnvironment>(mem, STACK_SIZE);
     m_ExMon = std::make_unique<dynarmic::ExclusiveMonitor>(1);
 }
 

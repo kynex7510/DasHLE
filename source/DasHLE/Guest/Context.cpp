@@ -4,6 +4,21 @@
 using namespace dashle;
 using namespace dashle::guest;
 
+constexpr static auto ARM_MEM_SIZE = static_cast<usize>(1u) << 32; // 4GB
+
+static std::unique_ptr<host::memory::HostAllocator> makeDefaultAlloc() {
+    auto alloc = std::make_unique<host::memory::HostAllocator>();
+    DASHLE_ASSERT(alloc);
+    return alloc;
+}
+
+static std::unique_ptr<arm::ARMContext> makeARMContext() {
+    auto ctx = std::make_unique<arm::ARMContext>(
+        std::make_unique<host::memory::MemoryManager>(makeDefaultAlloc(), ARM_MEM_SIZE));
+    DASHLE_ASSERT(ctx);
+    return ctx;
+}
+
 // GuestContext
 
 Expected<std::unique_ptr<GuestContext>> dashle::guest::createContext(const host::fs::path& path) {
@@ -19,7 +34,7 @@ Expected<std::unique_ptr<GuestContext>> dashle::guest::createContext(const std::
     DASHLE_TRY_OPTIONAL_CONST(arch, binary::elf::detectArch(buffer), Error::InvalidArch);
     switch (arch) {
         case binary::elf::constants::EM_ARM:
-            ctx = std::make_unique<arm::ARMContext>();
+            ctx = makeARMContext();
             break;
         default:
             return Unexpected(Error::InvalidArch);
