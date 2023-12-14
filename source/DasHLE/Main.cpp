@@ -97,16 +97,8 @@ class MyContext : public host::interop::SymResolver {
 
     DECLARE_CALLBACK(strlen) {
         auto vm = getInstance()->m_VM.get();
-
-        const auto reg = vm->getRegister(regs::R0);
-        const auto wrapped = vm->virtualToHost(reg);
-        DASHLE_ASSERT(wrapped);
-        const auto host = wrapped.value();
-        const auto ret = std::strlen(reinterpret_cast<char*>(host));
-        vm->setRegister(regs::R0, ret);
-
-        //DASHLE_ASSERT_WRAPPER_CONST(ptr, vm->virtualToHost(vm->getRegister(regs::R0)));
-        //vm->setRegister(regs::R0, std::strlen(reinterpret_cast<char*>(ptr)));
+        DASHLE_ASSERT_WRAPPER_CONST(ptr, vm->virtualToHost(vm->getRegister(regs::R0)));
+        vm->setRegister(regs::R0, std::strlen(reinterpret_cast<char*>(ptr)));
     }
 
     DECLARE_CALLBACK(malloc) {
