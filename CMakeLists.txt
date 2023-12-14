@@ -27,10 +27,10 @@ include_directories(source)
 
 set(DasHLE_SOURCES
     ${CMAKE_SOURCE_DIR}/source/DasHLE/Base.cpp
-    ${CMAKE_SOURCE_DIR}/source/DasHLE/Guest/ARM/ARMContext.cpp
-    ${CMAKE_SOURCE_DIR}/source/DasHLE/Guest/ARM/ARMEnvironment.cpp
-    ${CMAKE_SOURCE_DIR}/source/DasHLE/Guest/Context.cpp
     ${CMAKE_SOURCE_DIR}/source/DasHLE/Host/Memory.cpp
+    ${CMAKE_SOURCE_DIR}/source/DasHLE/Host/Interop.cpp
+    ${CMAKE_SOURCE_DIR}/source/DasHLE/Guest/ARM.cpp
+    ${CMAKE_SOURCE_DIR}/source/DasHLE/Guest/VM.cpp
     ${CMAKE_SOURCE_DIR}/source/DasHLE/Host/Linux/Base.cpp
 )
 

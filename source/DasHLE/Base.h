@@ -40,13 +40,13 @@
     auto _##name##Wrapper_ = (expr);                    \
     if (!(_##name##Wrapper_))                           \
         return Unexpected((_##name##Wrapper_).error()); \
-    auto name = _##name##Wrapper_.value()
+    auto name = std::move(_##name##Wrapper_.value())
 
-#define DASHLE_TRY_EXPECTED_CONST(name, expr)           \
-    const auto _##name##Wrapper_ = (expr);              \
-    if (!(_##name##Wrapper_))                           \
-        return Unexpected((_##name##Wrapper_).error()); \
-    const auto name = _##name##Wrapper_.value()
+#define DASHLE_TRY_EXPECTED_CONST(name, expr)              \
+    const auto _##name##Wrapper_ = (expr);                 \
+    if (!(_##name##Wrapper_))                              \
+        return Unexpected((_##name##Wrapper_).error());    \
+    const auto name = std::move(_##name##Wrapper_.value())
 
 #define DASHLE_TRY_EXPECTED_VOID(expr)                \
     {                                                 \
@@ -55,27 +55,27 @@
             return Unexpected(_voidWrapper_.error()); \
     }
 
-#define DASHLE_TRY_OPTIONAL(name, expr, error) \
-    auto _##name##Wrapper_ = (expr);           \
-    if (!(_##name##Wrapper_))                  \
-        return Unexpected((error));            \
-    auto name = _##name##Wrapper_.value()
-
-#define DASHLE_TRY_OPTIONAL_CONST(name, expr, error) \
-    const auto _##name##Wrapper_ = (expr);           \
+#define DASHLE_TRY_OPTIONAL(name, expr, error)       \
+    auto _##name##Wrapper_ = (expr);                 \
     if (!(_##name##Wrapper_))                        \
         return Unexpected((error));                  \
-    const auto name = _##name##Wrapper_.value()
+    auto name = std::move(_##name##Wrapper_.value())
 
-#define DASHLE_ASSERT_WRAPPER(name, expr) \
-    auto _##name##Wrapper_ = (expr);      \
-    DASHLE_ASSERT(_##name##Wrapper_);     \
-    auto name = _##name##Wrapper_.value()
+#define DASHLE_TRY_OPTIONAL_CONST(name, expr, error)       \
+    const auto _##name##Wrapper_ = (expr);                 \
+    if (!(_##name##Wrapper_))                              \
+        return Unexpected((error));                        \
+    const auto name = std::move(_##name##Wrapper_.value())
 
-#define DASHLE_ASSERT_WRAPPER_CONST(name, expr) \
-    const auto _##name##Wrapper_ = (expr);      \
-    DASHLE_ASSERT(_##name##Wrapper_);           \
-    const auto name = _##name##Wrapper_.value()
+#define DASHLE_ASSERT_WRAPPER(name, expr)            \
+    auto _##name##Wrapper_ = (expr);                 \
+    DASHLE_ASSERT(_##name##Wrapper_);                \
+    auto name = std::move(_##name##Wrapper_.value())
+
+#define DASHLE_ASSERT_WRAPPER_CONST(name, expr)            \
+    const auto _##name##Wrapper_ = (expr);                 \
+    DASHLE_ASSERT(_##name##Wrapper_);                      \
+    const auto name = std::move(_##name##Wrapper_.value())
 
 namespace dashle {
 
@@ -109,6 +109,7 @@ enum class Error {
     NoVirtualMemory,
     NoHostMemory,
     NotFound,
+    InvalidArgument,
 };
 
 template <typename T>

@@ -1,6 +1,6 @@
 # DasHLE
 
-Run android versions of Geometry Dash through high level emulation.
+(WIP) Run android versions of Geometry Dash through high level emulation.
 
 ```
 mkdir build
