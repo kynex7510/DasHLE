@@ -7,8 +7,6 @@
 
 namespace dashle::host::memory {
 
-constexpr static Optional<uaddr> NO_HINT = {};
-
 namespace flags {
 
 constexpr static usize PERM_READ = 0b0001;  // Read permission.
@@ -35,6 +33,13 @@ public:
     virtual void finalize() {}
     virtual bool alloc(AllocatedBlock& block);
     virtual void free(AllocatedBlock& block);
+};
+
+struct AllocArgs {
+    usize size;
+    usize alignment = 0u;
+    Optional<uaddr> hint = {};
+    usize flags = host::memory::flags::PERM_READ_WRITE;
 };
 
 class MemoryManager {
@@ -68,8 +73,7 @@ public:
     Expected<uaddr> findFreeAddr(usize size, usize alignment = 0u) const;
 
     // Allocate memory, return the virtual address.
-    Expected<const AllocatedBlock*> allocate(usize size, usize alignment = 0u, Optional<uaddr> hint = NO_HINT,
-        usize flags = host::memory::flags::PERM_READ_WRITE);
+    Expected<const AllocatedBlock*> allocate(const AllocArgs& args);
 
     // Free allocated memory.
     Expected<void> free(uaddr vbase);

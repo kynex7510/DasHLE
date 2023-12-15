@@ -195,20 +195,20 @@ Expected<uaddr> MemoryManager::findFreeAddr(usize size, usize alignment) const {
     });
 }
 
-Expected<const AllocatedBlock*> MemoryManager::allocate(usize size, usize alignment, Optional<uaddr> hintWrapper, usize flags) {
-    if (!size)
+Expected<const AllocatedBlock*> MemoryManager::allocate(const AllocArgs& args) {
+    if (!args.size)
         return Unexpected(Error::InvalidSize);
 
-    if (availableMemory() < size)
+    if (availableMemory() < args.size)
         return Unexpected(Error::NoVirtualMemory);
 
-    if (alignment && !dashle::isPowerOfTwo(alignment))
+    if (args.alignment && !dashle::isPowerOfTwo(args.alignment))
         return Unexpected(Error::InvalidAlignment);
 
-    if (alignment && (!dashle::isPowerOfTwo(size) || size < alignment))
+    if (args.alignment && (!dashle::isPowerOfTwo(args.size) || args.size < args.alignment))
         return Unexpected(Error::InvalidSize);
 
-    if (alignment && (flags & flags::FORCE_HINT))
+    if (args.alignment && (args.flags & flags::FORCE_HINT))
         return Unexpected(Error::InvalidFlags);
 
     auto& allocatedBlocks = m_Data->allocatedBlocks;
@@ -217,8 +217,8 @@ Expected<const AllocatedBlock*> MemoryManager::allocate(usize size, usize alignm
     uaddr allocBase = 0u;
 
     // Handle the case when we're given a hint.
-    if (hintWrapper) {
-        DASHLE_ASSERT_WRAPPER(hint, hintWrapper);
+    if (args.hint) {
+        DASHLE_ASSERT_WRAPPER(hint, args.hint);
 
         // Find a block that contains our hint (slow!).
         auto it = freeBlocks.begin();
@@ -232,12 +232,12 @@ Expected<const AllocatedBlock*> MemoryManager::allocate(usize size, usize alignm
         // Handle alignment and make sure that we have enough space.
         if (it != freeBlocks.end()) {
             // Alignment checks also check for available space.
-            if (alignment) {
+            if (args.alignment) {
                 // Attempt to align down.
-                DASHLE_ASSERT_WRAPPER_CONST(alignedDownAddr, dashle::align(hint, alignment));
+                DASHLE_ASSERT_WRAPPER_CONST(alignedDownAddr, dashle::align(hint, args.alignment));
                 if (alignedDownAddr < it->virtualBase) {
                     // Attempt to align up.
-                    DASHLE_ASSERT_WRAPPER_CONST(alignedUpAddr, dashle::alignOver(hint, alignment));
+                    DASHLE_ASSERT_WRAPPER_CONST(alignedUpAddr, dashle::alignOver(hint, args.alignment));
                     if (alignedUpAddr > (it->virtualBase + it->size)) {
                         it = freeBlocks.end();
                     } else {
@@ -248,8 +248,8 @@ Expected<const AllocatedBlock*> MemoryManager::allocate(usize size, usize alignm
                 }
             } else {
                 // Fallback to the base address if we don't have space and the hint isn't enforced.
-                if ((it->virtualBase + it->size) - hint < size) {
-                    if (!(flags & flags::FORCE_HINT)) {
+                if ((it->virtualBase + it->size) - hint < args.size) {
+                    if (!(args.flags & flags::FORCE_HINT)) {
                         hint = it->virtualBase;
                     } else {
                         it = freeBlocks.end();
@@ -259,7 +259,7 @@ Expected<const AllocatedBlock*> MemoryManager::allocate(usize size, usize alignm
         }
 
         // Fail if we havent found an address and the hint was enforced.
-        if (it == freeBlocks.end() && (flags & flags::FORCE_HINT))
+        if (it == freeBlocks.end() && (args.flags & flags::FORCE_HINT))
             return Unexpected(Error::NoVirtualMemory);
             
         allocIt = it;
@@ -269,11 +269,11 @@ Expected<const AllocatedBlock*> MemoryManager::allocate(usize size, usize alignm
     // Handle the general case.
     if (allocIt == freeBlocks.end()) {
         // This function takes care of the alignment.
-        DASHLE_TRY_EXPECTED(it, findFreeBlock(freeBlocks, size, alignment));
+        DASHLE_TRY_EXPECTED(it, findFreeBlock(freeBlocks, args.size, args.alignment));
         allocIt = it;
 
-        if (alignment) {
-            DASHLE_ASSERT_WRAPPER_CONST(alignedAddr, alignedBase(it->virtualBase, alignment));
+        if (args.alignment) {
+            DASHLE_ASSERT_WRAPPER_CONST(alignedAddr, alignedBase(it->virtualBase, args.alignment));
             allocBase = alignedAddr;
         } else {
             allocBase = it->virtualBase;
@@ -286,8 +286,8 @@ Expected<const AllocatedBlock*> MemoryManager::allocate(usize size, usize alignm
     auto& freeBlock = freeBlockNode.value();
     auto allocatedBlock = AllocatedBlock {
         .virtualBase = allocBase,
-        .size = size,
-        .flags = flags & flags::PERM_MASK
+        .size = args.size,
+        .flags = args.flags & flags::PERM_MASK
     };
 
     if (!hostAlloc(allocatedBlock)) {
