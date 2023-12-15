@@ -4,7 +4,7 @@ using namespace dashle;
 using namespace dashle::host::interop;
 
 // Each entry is the size of an ARM instruction.
-constexpr usize ENTRY_SIZE = 4;
+constexpr static usize ENTRY_SIZE = 4;
 
 // InteropHandler
 
@@ -13,7 +13,10 @@ InteropHandler::InteropHandler(std::shared_ptr<host::memory::MemoryManager> mem,
     DASHLE_ASSERT(maxEntries);
 
     // TODO: Which prot to use?
-    DASHLE_ASSERT_WRAPPER_CONST(block, m_Mem->allocate(m_MaxEntries * ENTRY_SIZE, host::memory::flags::PERM_READ_WRITE));
+    DASHLE_ASSERT_WRAPPER_CONST(block, m_Mem->allocate({
+        .size = m_MaxEntries * ENTRY_SIZE,
+        .flags = host::memory::flags::PERM_READ_WRITE
+    }));
     m_TableBase = block->virtualBase;
 }
 

@@ -27,7 +27,6 @@ std::string dashle::errorAsString(Error error) {
         ERROR_CASE(NoHostMemory);
         ERROR_CASE(NotFound);
         ERROR_CASE(InvalidArgument);
-        ERROR_CASE(InvalidFlags);
     }
 
 #undef ERROR_CASE

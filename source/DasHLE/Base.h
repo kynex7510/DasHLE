@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <cstdlib>
 #include <string>
 #include <expected>
 #include <optional>
@@ -12,7 +13,7 @@
 
 #define DASHLE_LOG_LINE(...)
 #define DASHLE_ASSERT(cond) (cond)
-#define DASHLE_UNREACHABLE(...) ::dashle::_internal::breakExec()
+#define DASHLE_UNREACHABLE(...) ::std::abort()
 
 #else
 
@@ -24,14 +25,14 @@
             DASHLE_LOG_LINE("Assertion failed: {}", #cond); \
             DASHLE_LOG_LINE("In file: {}", __FILE__);       \
             DASHLE_LOG_LINE("On line: {}", __LINE__);       \
-            ::dashle::_internal::breakExec();               \
+            ::std::abort();                                 \
         }                                                   \
     } while (false)
 
-#define DASHLE_UNREACHABLE(...)           \
-    do {                                  \
-        DASHLE_LOG_LINE(__VA_ARGS__);     \
-        ::dashle::_internal::breakExec(); \
+#define DASHLE_UNREACHABLE(...)       \
+    do {                              \
+        DASHLE_LOG_LINE(__VA_ARGS__); \
+        ::std::abort();               \
     } while (false)
 
 #endif // NDEBUG
@@ -110,8 +111,7 @@ enum class Error {
     NoVirtualMemory,
     NoHostMemory,
     NotFound,
-    InvalidArgument,
-    InvalidFlags,
+    InvalidArgument
 };
 
 template <typename T>
@@ -148,10 +148,7 @@ constexpr static auto DEBUG_MODE = true;
 #endif // NDEBUG
 
 namespace _internal {
-
-[[noreturn]] void breakExec();
 void logLine(const std::string& s);
-
 } // namespace dashle::_internal
 
 template <std::integral T>
