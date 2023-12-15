@@ -41,22 +41,17 @@ class MyContext : public host::interop::SymResolver {
     // Callbacks
 
     DECLARE_CALLBACK(pthread_once) {
-        DASHLE_LOG_LINE("Hello from pthread_once");
         auto vm = getInstance()->m_VM.get();
         const auto ctrl = vm->getRegister(regs::R0);
         const auto routine = vm->getRegister(regs::R1);
         const auto lr = vm->getRegister(regs::LR);
-        DASHLE_LOG_LINE("pthread_once called with ctrl = 0x{:X}", ctrl);
+        // DASHLE_LOG_LINE("pthread_once called with ctrl = 0x{:X}", ctrl);
         vm->setRegister(regs::R0, 88);
     }
 
-    DECLARE_CALLBACK(pthread_key_create) {
-        DASHLE_LOG_LINE("Hello from pthread_key_create");
-        getInstance()->m_VM->setRegister(regs::R0, 88);
-    }
+    DECLARE_CALLBACK(pthread_key_create) { getInstance()->m_VM->setRegister(regs::R0, 88); }
 
     DECLARE_CALLBACK(memcpy) {
-        DASHLE_LOG_LINE("Hello from memcpy");
         auto vm = getInstance()->m_VM.get();
         const auto destVAddr = vm->getRegister(regs::R0);
         DASHLE_ASSERT_WRAPPER_CONST(destAddr, vm->virtualToHost(destVAddr));
@@ -67,7 +62,6 @@ class MyContext : public host::interop::SymResolver {
     }
 
     DECLARE_CALLBACK(memset) {
-        DASHLE_LOG_LINE("Hello from memset");
         auto vm = getInstance()->m_VM.get();
         const auto destVAddr = vm->getRegister(regs::R0);
         DASHLE_ASSERT_WRAPPER_CONST(destAddr, vm->virtualToHost(destVAddr));
@@ -78,7 +72,6 @@ class MyContext : public host::interop::SymResolver {
     }
 
     DECLARE_CALLBACK(strcmp) {
-        DASHLE_LOG_LINE("Hello from strcmp");
         auto vm = getInstance()->m_VM.get();
         DASHLE_ASSERT_WRAPPER_CONST(s1, vm->virtualToHost(vm->getRegister(regs::R0)));
         DASHLE_ASSERT_WRAPPER_CONST(s2, vm->virtualToHost(vm->getRegister(regs::R1)));
@@ -86,39 +79,36 @@ class MyContext : public host::interop::SymResolver {
     }
 
     DECLARE_CALLBACK(wctob) {
-        DASHLE_LOG_LINE("Hello from wctob");
         auto vm = getInstance()->m_VM.get();
         vm->setRegister(regs::R0, std::wctob(vm->getRegister(regs::R0)));
     }
 
     DECLARE_CALLBACK(btowc) {
-        DASHLE_LOG_LINE("Hello from btowc");
         auto vm = getInstance()->m_VM.get();
         vm->setRegister(regs::R0, std::btowc(vm->getRegister(regs::R0)));
     }
 
     DECLARE_CALLBACK(wctype) {
-        DASHLE_LOG_LINE("Hello from wctype");
         auto vm = getInstance()->m_VM.get();
         DASHLE_ASSERT_WRAPPER_CONST(ptr, vm->virtualToHost(vm->getRegister(regs::R0)));
         vm->setRegister(regs::R0, std::wctype(reinterpret_cast<char*>(ptr)));
     }
 
-    DECLARE_CALLBACK(__cxa_atexit) { DASHLE_LOG_LINE("Hello from __cxa_atexit"); }
+    DECLARE_CALLBACK(__cxa_atexit) {}
 
     DECLARE_CALLBACK(strlen) {
-        DASHLE_LOG_LINE("Hello from strlen");
         auto vm = getInstance()->m_VM.get();
         DASHLE_ASSERT_WRAPPER_CONST(ptr, vm->virtualToHost(vm->getRegister(regs::R0)));
         vm->setRegister(regs::R0, std::strlen(reinterpret_cast<char*>(ptr)));
     }
 
     DECLARE_CALLBACK(malloc) {
-        DASHLE_LOG_LINE("Hello from malloc");
         auto vm = getInstance()->m_VM.get();
         auto mem = getInstance()->m_Mem.get();
         const auto size = vm->getRegister(regs::R0);
-        DASHLE_ASSERT_WRAPPER_CONST(block, mem->allocate({.size = size}));
+        DASHLE_LOG_LINE("Mallocin size = {}", size);
+        DASHLE_ASSERT_WRAPPER_CONST(block, mem->allocate({.size = size, .alignment = 8}));
+        DASHLE_LOG_LINE("Malloced vaddr = 0x{:X}", block->virtualBase);
         vm->setRegister(regs::R0, block->virtualBase);
     }
 
@@ -126,16 +116,16 @@ class MyContext : public host::interop::SymResolver {
 
     void registerAllCallbacks() {
         REGISTER_CALLBACK(pthread_once);
-        //REGISTER_CALLBACK(pthread_key_create);
+        REGISTER_CALLBACK(pthread_key_create);
         REGISTER_CALLBACK(memcpy);
-        //REGISTER_CALLBACK(memset);
-        //REGISTER_CALLBACK(strcmp);
-        //REGISTER_CALLBACK(wctob);
-        //REGISTER_CALLBACK(btowc);
-        //REGISTER_CALLBACK(wctype);
-        //REGISTER_CALLBACK(__cxa_atexit)
-        //REGISTER_CALLBACK(strlen);
-        //REGISTER_CALLBACK(malloc);
+        REGISTER_CALLBACK(memset);
+        REGISTER_CALLBACK(strcmp);
+        REGISTER_CALLBACK(wctob);
+        REGISTER_CALLBACK(btowc);
+        REGISTER_CALLBACK(wctype);
+        REGISTER_CALLBACK(__cxa_atexit);
+        REGISTER_CALLBACK(strlen);
+        REGISTER_CALLBACK(malloc);
     }
 
     MyContext() {
@@ -147,19 +137,22 @@ class MyContext : public host::interop::SymResolver {
 
         m_Interop = std::make_shared<host::interop::InteropHandler>(m_Mem, 11);
         registerAllCallbacks();
-
-        DASHLE_ASSERT_WRAPPER(vm, dashle::guest::makeVMFromFile(BINARY_PATH, dashle::guest::VMArgs {
-            .mem = m_Mem,
-            .interop = m_Interop,
-            .resolver = this,
-        }));
-        m_VM = std::move(vm);
     }
 
     Expected<uaddr> resolve(const std::string& symbol) const override {
-        // Look for functions.
+        // Handle functions.
         if (auto it = m_Symbols.find(symbol); it != m_Symbols.end())
             return it->second;
+        
+        // Handle variables.
+        if (symbol == "_ctype_") {
+            // TODO: make a correct table FFS.
+            DASHLE_TRY_EXPECTED_CONST(block, m_Mem->allocate({
+                .size = 257,
+                .flags = host::memory::flags::PERM_READ,
+            }));
+            return block->virtualBase;
+        }
 
         //return Unexpected(Error::NotFound);
         return 0u; // Ignore, for now.
@@ -171,12 +164,20 @@ public:
         return &ctx;
     }
 
-    void run() { m_VM->runInitializers(); }
+    void run() { 
+        DASHLE_ASSERT_WRAPPER(vm, dashle::guest::makeVMFromFile(BINARY_PATH, dashle::guest::VMArgs {
+            .mem = m_Mem,
+            .interop = m_Interop,
+            .resolver = this,
+        }));
+        m_VM = std::move(vm);
+        m_VM->runInitializers();
+    }
+
     void dump() { m_VM->dump(); }
 };
 
 /*
-
 
 using JNI_OnLoad_t = jni::jint(*)(jni::JavaVM* vm, void* reserved);
 using Cocos2dxHelper_nativeSetApkPath_t = void(*)(jni::JNIEnv* env, jni::jobject thiz, jni::jstring apkPath);

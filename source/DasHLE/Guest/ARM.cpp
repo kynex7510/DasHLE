@@ -16,6 +16,21 @@ constexpr static u32 cpsrThumbDisable(u32 cpsr) { return cpsr & ~(0x30u); }
 constexpr static bool isThumb(u32 addr) { return addr & 1u; }
 constexpr static u32 clearThumb(u32 addr) { return addr & ~(1u); }
 
+static std::string getPermString(usize flags) {
+    std::string permString("---");
+
+    if (flags & host::memory::flags::PERM_READ)
+        permString[0] = 'r';
+
+    if (flags & host::memory::flags::PERM_WRITE)
+        permString[1] = 'w';
+
+    if (flags & host::memory::flags::PERM_EXEC)
+        permString[2] = 'x';
+
+    return permString;
+}
+
 // Environment
 
 struct VMImpl::Environment final : public dynarmic32::UserCallbacks {
@@ -40,12 +55,12 @@ struct VMImpl::Environment final : public dynarmic32::UserCallbacks {
             flags &= host::memory::flags::PERM_MASK;
             const auto block = m_Mem->blockFromVAddr(vaddr);
             if (verbose && !block) {
-                DASHLE_LOG_LINE("Block not found (vaddr=0x{:X}, expected={})", vaddr, flags);
+                DASHLE_LOG_LINE("Block not found (vaddr=0x{:X}, expected={})", vaddr, getPermString(flags));
                 DASHLE_LOG_LINE("Gonna assert wawa");
             }
             DASHLE_ASSERT(block);
             if (verbose && !(block.value()->flags & flags)) {
-                DASHLE_LOG_LINE("Invalid flags (expected={}, found={})", flags, block.value()->flags);
+                DASHLE_LOG_LINE("Invalid flags (expected={}, found={})", getPermString(flags), getPermString(block.value()->flags));
                 DASHLE_LOG_LINE("Trying to read 0x{:X}", vaddr);
                 DASHLE_LOG_LINE("Gonna assert wawa");
             }
@@ -342,16 +357,18 @@ dynarmic::HaltReason VMImpl::execute(Optional<uaddr> wrappedAddr) {
     if (!wrappedAddr)
         return m_Jit->Run();
 
+    const auto stopAddr = m_StackBase;
     DASHLE_ASSERT_WRAPPER_CONST(addr, wrappedAddr);
+    m_Jit->Regs()[regs::LR] = stopAddr;
     setPC(addr);
 
     auto reason = EXEC_SUCCESS;
-    DASHLE_LOG_LINE("Running at addr = 0x{:X}", addr);
     while (reason == EXEC_SUCCESS) {
         reason = m_Jit->Run();
+        if (m_Jit->Regs()[regs::PC] == stopAddr)
+            break;
+
         DASHLE_LOG_LINE("PC: 0x{:X}, LR: 0x{:X}", m_Jit->Regs()[regs::PC], m_Jit->Regs()[regs::LR]);
-        //if (m_Jit->Regs()[regs::PC] == clearThumb(stopAddr))
-        //    break;
     }
 
     return reason;
@@ -369,17 +386,11 @@ dynarmic::HaltReason VMImpl::step(Optional<uaddr> wrappedAddr) {
 }
 
 void VMImpl::runInitializers() {
-    if (auto reason = execute(m_Initializers[0]); reason != EXEC_SUCCESS) {
-        dump();
-        DASHLE_UNREACHABLE("Init call failed (reason={})", static_cast<u32>(reason));
-    }
-    /*
     for (auto vaddr : m_Initializers) {
         if (auto reason = execute(vaddr); reason != EXEC_SUCCESS) {
             DASHLE_UNREACHABLE("Init call failed (vaddr=0x{:X}, reason={})", vaddr, static_cast<u32>(reason));
         }
     }
-    */
 }
 
 void VMImpl::setRegister(usize id, u64 value) {
