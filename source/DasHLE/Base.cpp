@@ -10,6 +10,7 @@ std::string dashle::errorAsString(Error error) {
     switch (error) {
         ERROR_CASE(OpenFailed);
         ERROR_CASE(InvalidSize);
+        ERROR_CASE(InvalidAlignment);
         ERROR_CASE(InvalidMagic);
         ERROR_CASE(InvalidClass);
         ERROR_CASE(InvalidDataEncoding);
@@ -26,6 +27,7 @@ std::string dashle::errorAsString(Error error) {
         ERROR_CASE(NoHostMemory);
         ERROR_CASE(NotFound);
         ERROR_CASE(InvalidArgument);
+        ERROR_CASE(InvalidFlags);
     }
 
 #undef ERROR_CASE

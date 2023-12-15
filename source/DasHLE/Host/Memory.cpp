@@ -78,7 +78,7 @@ void MemoryManager::initialize() {
 
     // Add main free block.
     const auto pair = m_Data->freeBlocks.insert({
-        .virtualBase = m_Offset,
+        .virtualBase = 0u,
         .size = maxMemory()});
     DASHLE_ASSERT(pair.second);
 }
@@ -124,15 +124,11 @@ void MemoryManager::hostFree(AllocatedBlock& block) {
     m_HostAllocator->free(block);
 }
 
-MemoryManager::MemoryManager(std::unique_ptr<HostAllocator> hostAllocator, usize maxMemory, uaddr offset)
-    : m_HostAllocator(std::move(hostAllocator)), m_MaxMemory(maxMemory), m_Offset(offset) {
-    if (invalidAddr() > virtualOffset()) {
-        m_Data = std::make_unique<dashle::host::memory::MemoryManager::Data>();
-        initialize();
-        return;
-    }
-
-    DASHLE_UNREACHABLE("Wrap around detected (maxMemory={}, offset={})", maxMemory, offset);
+MemoryManager::MemoryManager(std::unique_ptr<HostAllocator> hostAllocator, usize maxMemory)
+    : m_HostAllocator(std::move(hostAllocator)), m_MaxMemory(maxMemory) {
+    DASHLE_ASSERT(dashle::isPowerOfTwo(MemoryManager::maxMemory()));
+    m_Data = std::make_unique<dashle::host::memory::MemoryManager::Data>();
+    initialize();
 }
 
 MemoryManager::~MemoryManager() { finalize(); }
@@ -152,34 +148,78 @@ Expected<const AllocatedBlock*> MemoryManager::blockFromVAddr(uaddr vaddr) const
     return Unexpected(Error::NotFound);
 }
 
-static Expected<FreeBlockSet::iterator> findFreeBlock(FreeBlockSet& freeBlocks, usize size) {
+static Expected<uaddr> alignedBase(uaddr base, usize alignment) {
+    DASHLE_TRY_EXPECTED_CONST(alignedDown, dashle::align(base, alignment));
+
+    // If the address is aligned we don't have to do anything.
+    if (alignedDown != base) {
+        DASHLE_ASSERT_WRAPPER_CONST(alignedUp, dashle::alignOver(base, alignment));
+        return alignedUp;
+    }
+
+    return alignedDown;
+}
+
+static Expected<FreeBlockSet::iterator> findFreeBlock(FreeBlockSet& freeBlocks, usize requestedSize, usize alignment) {
     // Find the smallest block that can hold size bytes (best-fit).
     // This is optimized for small allocations.
-    auto it = freeBlocks.lower_bound({.size = size});
+    auto it = freeBlocks.lower_bound({.size = requestedSize});
     if (it == freeBlocks.end())
         return Unexpected(Error::NoVirtualMemory);
+
+    // Check that we have enough space for alignment.
+    if (alignment) {
+        do {
+            DASHLE_ASSERT_WRAPPER_CONST(alignedAddr, alignedBase(it->virtualBase, alignment));
+            const auto avalSize = it->size - (alignedAddr - it->virtualBase);
+            if (avalSize >= requestedSize)
+                break;
+        } while (++it != freeBlocks.end());
+
+        if (it == freeBlocks.end())
+            return Unexpected(Error::NoVirtualMemory);
+    }
 
     return it;
 }
 
-Expected<uaddr> MemoryManager::findFreeAddr(usize size) const {
-    return findFreeBlock(m_Data->freeBlocks, size).and_then([](FreeBlockSet::iterator it) -> Expected<uaddr> {
+Expected<uaddr> MemoryManager::findFreeAddr(usize size, usize alignment) const {
+    return findFreeBlock(m_Data->freeBlocks, size, alignment).and_then([alignment](FreeBlockSet::iterator it) -> Expected<uaddr> {
+        if (alignment) {
+            // If we got there, the alignment has to be valid.
+            DASHLE_ASSERT_WRAPPER_CONST(alignedAddr, alignedBase(it->virtualBase, alignment));
+            return alignedAddr;
+        }
+
         return it->virtualBase;
     });
 }
 
-Expected<const AllocatedBlock*> MemoryManager::allocate(uaddr hint, usize size, usize flags) {
+Expected<const AllocatedBlock*> MemoryManager::allocate(usize size, usize alignment, Optional<uaddr> hintWrapper, usize flags) {
     if (!size)
         return Unexpected(Error::InvalidSize);
 
     if (availableMemory() < size)
         return Unexpected(Error::NoVirtualMemory);
 
+    if (alignment && !dashle::isPowerOfTwo(alignment))
+        return Unexpected(Error::InvalidAlignment);
+
+    if (alignment && (!dashle::isPowerOfTwo(size) || size < alignment))
+        return Unexpected(Error::InvalidSize);
+
+    if (alignment && (flags & flags::FORCE_HINT))
+        return Unexpected(Error::InvalidFlags);
+
     auto& allocatedBlocks = m_Data->allocatedBlocks;
     auto& freeBlocks = m_Data->freeBlocks;
+    auto allocIt = freeBlocks.end();
+    uaddr allocBase = 0u;
 
     // Handle the case when we're given a hint.
-    if (hint != invalidAddr()) {
+    if (hintWrapper) {
+        DASHLE_ASSERT_WRAPPER(hint, hintWrapper);
+
         // Find a block that contains our hint (slow!).
         auto it = freeBlocks.begin();
         while (it != freeBlocks.end()) {
@@ -188,70 +228,88 @@ Expected<const AllocatedBlock*> MemoryManager::allocate(uaddr hint, usize size, 
 
             ++it;
         }
-
-        // Make sure we have enough space.
-        if ((it->virtualBase + it->size) - hint < size)
-            it = freeBlocks.end();
-
+    
+        // Handle alignment and make sure that we have enough space.
         if (it != freeBlocks.end()) {
-            // Allocate block in memory.
-            auto freeBlockNode = freeBlocks.extract(it);
-            auto allocatedBlock = AllocatedBlock {
-                .virtualBase = hint,
-                .size = size,
-                .flags = flags & flags::PERM_MASK};
-
-            if (!hostAlloc(allocatedBlock)) {
-                freeBlocks.insert(std::move(freeBlockNode));
-                return Unexpected(Error::NoHostMemory);
+            // Alignment checks also check for available space.
+            if (alignment) {
+                // Attempt to align down.
+                DASHLE_ASSERT_WRAPPER_CONST(alignedDownAddr, dashle::align(hint, alignment));
+                if (alignedDownAddr < it->virtualBase) {
+                    // Attempt to align up.
+                    DASHLE_ASSERT_WRAPPER_CONST(alignedUpAddr, dashle::alignOver(hint, alignment));
+                    if (alignedUpAddr > (it->virtualBase + it->size)) {
+                        it = freeBlocks.end();
+                    } else {
+                        hint = alignedUpAddr;
+                    }
+                } else {
+                    hint = alignedDownAddr;
+                }
+            } else {
+                // Fallback to the base address if we don't have space and the hint isn't enforced.
+                if ((it->virtualBase + it->size) - hint < size) {
+                    if (!(flags & flags::FORCE_HINT)) {
+                        hint = it->virtualBase;
+                    } else {
+                        it = freeBlocks.end();
+                    }
+                }
             }
+        }
 
-            // Split free block.
-            auto& oldFreeBlock = freeBlockNode.value();
-            auto freeBlockFirst = FreeBlock {
-                .virtualBase = oldFreeBlock.virtualBase,
-                .size = allocatedBlock.virtualBase - oldFreeBlock.virtualBase};
-            if (freeBlockFirst.size)
-                freeBlocks.insert(std::move(freeBlockFirst));
-
-            auto freeBlockLast = FreeBlock {
-                .virtualBase = allocatedBlock.virtualBase + allocatedBlock.size,
-                .size = (oldFreeBlock.virtualBase + oldFreeBlock.size) - (allocatedBlock.virtualBase + allocatedBlock.size)};
-            if (freeBlockLast.size)
-                freeBlocks.insert(std::move(freeBlockLast));
-
-            // Add the new allocated block.
-            auto ret = allocatedBlocks.insert(allocatedBlock);
-            DASHLE_ASSERT(ret.second);
-            m_UsedMemory += allocatedBlock.size;
-            return &*ret.first;
-        } else if (flags & flags::FORCE_HINT) {
-            // Fail if we are explicitly asked for an address.
+        // Fail if we havent found an address and the hint was enforced.
+        if (it == freeBlocks.end() && (flags & flags::FORCE_HINT))
             return Unexpected(Error::NoVirtualMemory);
+            
+        allocIt = it;
+        allocBase = hint;
+    }
+    
+    // Handle the general case.
+    if (allocIt == freeBlocks.end()) {
+        // This function takes care of the alignment.
+        DASHLE_TRY_EXPECTED(it, findFreeBlock(freeBlocks, size, alignment));
+        allocIt = it;
+
+        if (alignment) {
+            DASHLE_ASSERT_WRAPPER_CONST(alignedAddr, alignedBase(it->virtualBase, alignment));
+            allocBase = alignedAddr;
+        } else {
+            allocBase = it->virtualBase;
         }
     }
 
-    // Find free block.
-    DASHLE_TRY_EXPECTED(it, findFreeBlock(freeBlocks, size));
-
+    // At this point allocIt is always valid.
     // Allocate block in memory.
-    auto freeBlockNode = freeBlocks.extract(it);
+    auto freeBlockNode = freeBlocks.extract(allocIt);
     auto& freeBlock = freeBlockNode.value();
     auto allocatedBlock = AllocatedBlock {
-        .virtualBase = freeBlock.virtualBase,
+        .virtualBase = allocBase,
         .size = size,
-        .flags = flags & flags::PERM_MASK};
+        .flags = flags & flags::PERM_MASK
+    };
 
     if (!hostAlloc(allocatedBlock)) {
         freeBlocks.insert(std::move(freeBlockNode));
         return Unexpected(Error::NoHostMemory);
     }
 
-    // Update the free block.
-    freeBlock.virtualBase += size;
-    freeBlock.size -= size;
-    if (freeBlock.size)
-        freeBlocks.insert(std::move(freeBlockNode));
+    // Split free block.
+    auto& oldFreeBlock = freeBlockNode.value();
+    auto freeBlockFirst = FreeBlock {
+        .virtualBase = oldFreeBlock.virtualBase,
+        .size = allocatedBlock.virtualBase - oldFreeBlock.virtualBase
+    };
+    if (freeBlockFirst.size)
+        freeBlocks.insert(std::move(freeBlockFirst));
+
+    auto freeBlockLast = FreeBlock {
+        .virtualBase = allocatedBlock.virtualBase + allocatedBlock.size,
+        .size = (oldFreeBlock.virtualBase + oldFreeBlock.size) - (allocatedBlock.virtualBase + allocatedBlock.size)
+    };
+    if (freeBlockLast.size)
+        freeBlocks.insert(std::move(freeBlockLast));
 
     // Add the new allocated block.
     auto ret = allocatedBlocks.insert(allocatedBlock);

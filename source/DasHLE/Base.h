@@ -94,6 +94,7 @@ using soff = std::ptrdiff_t;
 enum class Error {
     OpenFailed,
     InvalidSize,
+    InvalidAlignment,
     InvalidMagic,
     InvalidClass,
     InvalidDataEncoding,
@@ -110,6 +111,7 @@ enum class Error {
     NoHostMemory,
     NotFound,
     InvalidArgument,
+    InvalidFlags,
 };
 
 template <typename T>
@@ -152,12 +154,25 @@ void logLine(const std::string& s);
 
 } // namespace dashle::_internal
 
-constexpr uaddr alignAddr(uaddr addr, usize align) {
-    return addr & ~(align - 1);
+template <std::integral T>
+constexpr bool isPowerOfTwo(T val) {
+    return val && !(val & (val - 1));
 }
 
-constexpr usize alignSize(usize size, usize align) {
-    return (size + (align - 1)) & ~(align - 1);
+template <std::integral T>
+constexpr Expected<T> align(T val, T alignment) {
+    if (dashle::isPowerOfTwo(alignment))
+        return val & ~(alignment - 1);
+
+    return Unexpected(Error::InvalidAlignment);
+}
+
+template <std::integral T>
+constexpr Expected<T> alignOver(T val, T alignment) {
+    if (dashle::isPowerOfTwo(alignment))
+        return (val + (alignment - 1)) & ~(alignment - 1);
+
+    return Unexpected(Error::InvalidAlignment);
 }
 
 std::string errorAsString(Error error);

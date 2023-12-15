@@ -7,6 +7,8 @@
 
 namespace dashle::host::memory {
 
+constexpr static Optional<uaddr> NO_HINT = {};
+
 namespace flags {
 
 constexpr static usize PERM_READ = 0b0001;  // Read permission.
@@ -42,7 +44,6 @@ class MemoryManager {
     std::unique_ptr<Data> m_Data;
     const usize m_MaxMemory = 0u;
     usize m_UsedMemory = 0u;
-    uaddr m_Offset = 0u;
 
     void initialize();
     void finalize();
@@ -50,16 +51,12 @@ class MemoryManager {
     void hostFree(AllocatedBlock& block);
 
 public:
-    MemoryManager(std::unique_ptr<HostAllocator> allocator, usize maxMemory, usize offset = 0u);
+    MemoryManager(std::unique_ptr<HostAllocator> allocator, usize maxMemory);
     ~MemoryManager();
 
     usize maxMemory() const { return m_MaxMemory; }
     usize usedMemory() const { return m_UsedMemory; }
     usize availableMemory() const { return maxMemory() - usedMemory(); }
-    usize virtualOffset() const { return m_Offset; }
-
-    // Return an always invalid virtual address.
-    uaddr invalidAddr() const { return virtualOffset() + maxMemory(); }
     
     // Free all allocated memory and reset internal state.
     void reset();
@@ -68,14 +65,11 @@ public:
     Expected<const AllocatedBlock*> blockFromVAddr(uaddr vaddr) const;
 
     // Find an address that can be used for allocation.
-    Expected<uaddr> findFreeAddr(usize size) const;
+    Expected<uaddr> findFreeAddr(usize size, usize alignment = 0u) const;
 
     // Allocate memory, return the virtual address.
-    Expected<const AllocatedBlock*> allocate(uaddr hint, usize size, usize flags);
-
-    Expected<const AllocatedBlock*> allocate(usize size, usize flags = flags::PERM_READ | flags::PERM_WRITE) {
-        return allocate(invalidAddr(), size, flags);
-    }
+    Expected<const AllocatedBlock*> allocate(usize size, usize alignment = 0u, Optional<uaddr> hint = NO_HINT,
+        usize flags = host::memory::flags::PERM_READ_WRITE);
 
     // Free allocated memory.
     Expected<void> free(uaddr vbase);
