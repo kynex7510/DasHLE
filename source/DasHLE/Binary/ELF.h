@@ -455,7 +455,7 @@ Expected<uaddr> getSegmentAllocBase(const typename CFG::ProgramHeaderType* segme
         if ((segment->p_vaddr % segment->p_align) != (segment->p_offset % segment->p_align))
             return Unexpected(Error::InvalidSegment);
 
-        return alignAddr(segment->p_vaddr, segment->p_align);
+        return dashle::align(segment->p_vaddr, segment->p_align);
     }
 
     return segment->p_vaddr;
@@ -467,7 +467,7 @@ Expected<usize> getSegmentAllocSize(const typename CFG::ProgramHeaderType* segme
     return Unexpected(Error::InvalidSegment);
 
     if (segment->p_align > 1)
-        return alignSize(segment->p_memsz, segment->p_align);
+        return dashle::alignOver(segment->p_memsz, segment->p_align);
 
     return segment->p_memsz;
 }
