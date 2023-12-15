@@ -79,7 +79,8 @@ void MemoryManager::initialize() {
     // Add main free block.
     const auto pair = m_Data->freeBlocks.insert({
         .virtualBase = m_Offset,
-        .size = maxMemory()});
+        .size = maxMemory()
+    });
     DASHLE_ASSERT(pair.second);
 }
 
@@ -347,7 +348,8 @@ Expected<void> MemoryManager::free(uaddr vbase) {
     // Handle merging with previous and next blocks.
     auto newFreeBlock = FreeBlock{
         .virtualBase = it->virtualBase,
-        .size = it->size};
+        .size = it->size
+    };
 
     const auto handleBlock = [&newFreeBlock=newFreeBlock](FreeBlockSet& freeBlocks, const FreeBlock& block, bool prev) {
         const auto freeBlockIt = freeBlocks.find(block);
@@ -371,7 +373,8 @@ Expected<void> MemoryManager::free(uaddr vbase) {
         if (prevAllocBlockEnd != it->virtualBase) {
             const auto prevFreeBlock = FreeBlock{
                 .virtualBase = prevAllocBlockEnd,
-                .size = it->virtualBase - prevAllocBlockEnd};
+                .size = it->virtualBase - prevAllocBlockEnd
+            };
             handleBlock(freeBlocks, prevFreeBlock, true);
         }
     } else {
@@ -380,7 +383,8 @@ Expected<void> MemoryManager::free(uaddr vbase) {
         if (it->virtualBase != 0u) {
             const auto firstFreeBlock = FreeBlock{
                 .virtualBase = 0u,
-                .size = it->virtualBase};
+                .size = it->virtualBase
+            };
             handleBlock(freeBlocks, firstFreeBlock, true);
         }
     }
@@ -391,7 +395,8 @@ Expected<void> MemoryManager::free(uaddr vbase) {
         if (thisAllocBlockEnd != nextAllocBlock->virtualBase) {
             const auto nextFreeBlock = FreeBlock{
                 .virtualBase = thisAllocBlockEnd,
-                .size = nextAllocBlock->virtualBase - thisAllocBlockEnd};
+                .size = nextAllocBlock->virtualBase - thisAllocBlockEnd
+            };
             handleBlock(freeBlocks, nextFreeBlock, false);
         }
     } else {
@@ -401,7 +406,8 @@ Expected<void> MemoryManager::free(uaddr vbase) {
             const auto thisAllocBlockEnd = it->virtualBase + it->size;
             const auto lastFreeBlock = FreeBlock{
                 .virtualBase = thisAllocBlockEnd,
-                .size = maxMemory() - thisAllocBlockEnd};
+                .size = maxMemory() - thisAllocBlockEnd
+            };
             handleBlock(freeBlocks, lastFreeBlock, false);
         }
     }

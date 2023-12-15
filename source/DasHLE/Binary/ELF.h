@@ -450,7 +450,7 @@ Expected<Segments<CFG>> getSegments(const typename CFG::HeaderType* header, type
 }
 
 template <ConfigType CFG>
-Expected<uaddr> getSegmentAllocBase(const typename CFG::ProgramHeaderType* segment) {
+Expected<uaddr> getSegmentAllocOffset(const typename CFG::ProgramHeaderType* segment) {
     if (segment->p_align > 1) {
         if ((segment->p_vaddr % segment->p_align) != (segment->p_offset % segment->p_align))
             return Unexpected(Error::InvalidSegment);

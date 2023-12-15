@@ -9,6 +9,12 @@
 
 namespace dashle::guest::arm {
 
+constexpr static usize PAGE_SIZE = 0x1000; // 4KB
+static_assert(dashle::isPowerOfTwo(PAGE_SIZE));
+
+constexpr static usize STACK_SIZE = 1024 * 1024; // 1MB
+static_assert(dashle::align<usize>(STACK_SIZE, PAGE_SIZE) == STACK_SIZE);
+
 namespace regs {
 
 constexpr static usize R0 = 0;
@@ -60,19 +66,10 @@ public:
     Expected<void> loadBinary(const std::span<const u8> buffer) override;
 
     Expected<uaddr> virtualToHost(uaddr vaddr) const override;
-    uaddr invalidAddr() const override;
 
-    dynarmic::HaltReason execute(uaddr addr) override;
-    dynarmic::HaltReason step(uaddr addr) override;
+    dynarmic::HaltReason execute(Optional<uaddr> addr = {}) override;
+    dynarmic::HaltReason step(Optional<uaddr> addr = {}) override;
     void runInitializers() override;
-
-    dynarmic::HaltReason execute() override {
-        return execute(invalidAddr());
-    }
-
-    dynarmic::HaltReason step() override {
-        return step(invalidAddr());
-    }
 
     void clearCache() override {
         DASHLE_ASSERT(m_Jit);

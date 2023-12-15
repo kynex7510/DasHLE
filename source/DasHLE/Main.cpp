@@ -19,6 +19,7 @@ namespace regs = dashle::guest::arm::regs;
         m_Symbols.insert({ (#name), vaddr });                                               \
     }
 
+constexpr usize MEM_4GB = static_cast<usize>(1u) << 32;
 constexpr const char BINARY_PATH[] = "/home/user/Documents/repos/DasHLE/app/lib/armeabi-v7a/libcocos2dcpp.so";
 
 // MyContext
@@ -31,7 +32,7 @@ class MyContext : public host::interop::SymResolver {
 
     static void emitCallToFunc(host::interop::IREmitterWrapper emitter, void(*fn)(u64, u64, u64)) {
         // BUG: https://github.com/merryhime/dynarmic/issues/767
-        const auto dummy = dynarmic_ir::U64(dynarmic_ir::Value(0x1337ul));
+        const auto dummy = dynarmic_ir::U64(dynarmic_ir::Value(0ul));
         emitter->CallHostFunction(fn, dummy, dummy, dummy);
         emitter->BXWritePC(emitter->GetRegister(dynarmic32::Reg(regs::LR)));
         emitter->SetTerm(dynarmic_ir::Term::ReturnToDispatch{});
@@ -40,6 +41,7 @@ class MyContext : public host::interop::SymResolver {
     // Callbacks
 
     DECLARE_CALLBACK(pthread_once) {
+        DASHLE_LOG_LINE("Hello from pthread_once");
         auto vm = getInstance()->m_VM.get();
         const auto ctrl = vm->getRegister(regs::R0);
         const auto routine = vm->getRegister(regs::R1);
@@ -48,9 +50,13 @@ class MyContext : public host::interop::SymResolver {
         vm->setRegister(regs::R0, 88);
     }
 
-    DECLARE_CALLBACK(pthread_key_create) { getInstance()->m_VM->setRegister(regs::R0, 88); }
+    DECLARE_CALLBACK(pthread_key_create) {
+        DASHLE_LOG_LINE("Hello from pthread_key_create");
+        getInstance()->m_VM->setRegister(regs::R0, 88);
+    }
 
     DECLARE_CALLBACK(memcpy) {
+        DASHLE_LOG_LINE("Hello from memcpy");
         auto vm = getInstance()->m_VM.get();
         const auto destVAddr = vm->getRegister(regs::R0);
         DASHLE_ASSERT_WRAPPER_CONST(destAddr, vm->virtualToHost(destVAddr));
@@ -61,6 +67,7 @@ class MyContext : public host::interop::SymResolver {
     }
 
     DECLARE_CALLBACK(memset) {
+        DASHLE_LOG_LINE("Hello from memset");
         auto vm = getInstance()->m_VM.get();
         const auto destVAddr = vm->getRegister(regs::R0);
         DASHLE_ASSERT_WRAPPER_CONST(destAddr, vm->virtualToHost(destVAddr));
@@ -71,6 +78,7 @@ class MyContext : public host::interop::SymResolver {
     }
 
     DECLARE_CALLBACK(strcmp) {
+        DASHLE_LOG_LINE("Hello from strcmp");
         auto vm = getInstance()->m_VM.get();
         DASHLE_ASSERT_WRAPPER_CONST(s1, vm->virtualToHost(vm->getRegister(regs::R0)));
         DASHLE_ASSERT_WRAPPER_CONST(s2, vm->virtualToHost(vm->getRegister(regs::R1)));
@@ -78,34 +86,39 @@ class MyContext : public host::interop::SymResolver {
     }
 
     DECLARE_CALLBACK(wctob) {
+        DASHLE_LOG_LINE("Hello from wctob");
         auto vm = getInstance()->m_VM.get();
         vm->setRegister(regs::R0, std::wctob(vm->getRegister(regs::R0)));
     }
 
     DECLARE_CALLBACK(btowc) {
+        DASHLE_LOG_LINE("Hello from btowc");
         auto vm = getInstance()->m_VM.get();
         vm->setRegister(regs::R0, std::btowc(vm->getRegister(regs::R0)));
     }
 
     DECLARE_CALLBACK(wctype) {
+        DASHLE_LOG_LINE("Hello from wctype");
         auto vm = getInstance()->m_VM.get();
         DASHLE_ASSERT_WRAPPER_CONST(ptr, vm->virtualToHost(vm->getRegister(regs::R0)));
         vm->setRegister(regs::R0, std::wctype(reinterpret_cast<char*>(ptr)));
     }
 
-    DECLARE_CALLBACK(__cxa_atexit) { /* Do nothing. */ }
+    DECLARE_CALLBACK(__cxa_atexit) { DASHLE_LOG_LINE("Hello from __cxa_atexit"); }
 
     DECLARE_CALLBACK(strlen) {
+        DASHLE_LOG_LINE("Hello from strlen");
         auto vm = getInstance()->m_VM.get();
         DASHLE_ASSERT_WRAPPER_CONST(ptr, vm->virtualToHost(vm->getRegister(regs::R0)));
         vm->setRegister(regs::R0, std::strlen(reinterpret_cast<char*>(ptr)));
     }
 
     DECLARE_CALLBACK(malloc) {
+        DASHLE_LOG_LINE("Hello from malloc");
         auto vm = getInstance()->m_VM.get();
         auto mem = getInstance()->m_Mem.get();
         const auto size = vm->getRegister(regs::R0);
-        DASHLE_ASSERT_WRAPPER_CONST(block, mem->allocate(size, host::memory::flags::PERM_READ_WRITE));
+        DASHLE_ASSERT_WRAPPER_CONST(block, mem->allocate({.size = size}));
         vm->setRegister(regs::R0, block->virtualBase);
     }
 
@@ -113,22 +126,24 @@ class MyContext : public host::interop::SymResolver {
 
     void registerAllCallbacks() {
         REGISTER_CALLBACK(pthread_once);
-        REGISTER_CALLBACK(pthread_key_create);
+        //REGISTER_CALLBACK(pthread_key_create);
         REGISTER_CALLBACK(memcpy);
-        REGISTER_CALLBACK(memset);
-        REGISTER_CALLBACK(strcmp);
-        REGISTER_CALLBACK(wctob);
-        REGISTER_CALLBACK(btowc);
-        REGISTER_CALLBACK(wctype);
-        REGISTER_CALLBACK(__cxa_atexit)
-        REGISTER_CALLBACK(strlen);
-        REGISTER_CALLBACK(malloc);
+        //REGISTER_CALLBACK(memset);
+        //REGISTER_CALLBACK(strcmp);
+        //REGISTER_CALLBACK(wctob);
+        //REGISTER_CALLBACK(btowc);
+        //REGISTER_CALLBACK(wctype);
+        //REGISTER_CALLBACK(__cxa_atexit)
+        //REGISTER_CALLBACK(strlen);
+        //REGISTER_CALLBACK(malloc);
     }
 
     MyContext() {
         m_Mem = std::make_shared<host::memory::MemoryManager>(
             std::make_unique<host::memory::HostAllocator>(),
-            static_cast<usize>(1u) << 32);
+            MEM_4GB - guest::arm::PAGE_SIZE,
+            32,
+            guest::arm::PAGE_SIZE);
 
         m_Interop = std::make_shared<host::interop::InteropHandler>(m_Mem, 11);
         registerAllCallbacks();
@@ -142,11 +157,12 @@ class MyContext : public host::interop::SymResolver {
     }
 
     Expected<uaddr> resolve(const std::string& symbol) const override {
+        // Look for functions.
         if (auto it = m_Symbols.find(symbol); it != m_Symbols.end())
             return it->second;
 
         //return Unexpected(Error::NotFound);
-        return 0; // Ignore, for now.
+        return 0u; // Ignore, for now.
     }
 
 public:

@@ -208,7 +208,7 @@ public:
 
     static inline const auto& wrapPermissionFlags = binary::wrapPermissionFlags<CFG>;
     static inline const auto& unwrapPermissionFlags = binary::unwrapPermissionFlags<CFG>;
-    static inline const auto& segmentAllocBase = &elf::getSegmentAllocBase<CFG>;
+    static inline const auto& segmentAllocOffset = &elf::getSegmentAllocOffset<CFG>;
     static inline const auto& segmentAllocSize = &elf::getSegmentAllocSize<CFG>;
 
     auto segments(typename CFG::WordType type) const { return elf::getSegments<CFG>(header(), type); }

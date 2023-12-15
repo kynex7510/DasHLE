@@ -16,12 +16,9 @@ struct GuestVM {
     virtual Expected<void> loadBinary(const std::span<const u8> buffer) = 0;
 
     virtual Expected<uaddr> virtualToHost(uaddr vaddr) const = 0;
-    virtual uaddr invalidAddr() const = 0;
 
-    virtual dynarmic::HaltReason execute() = 0;
-    virtual dynarmic::HaltReason execute(uaddr addr) = 0;
-    virtual dynarmic::HaltReason step() = 0;
-    virtual dynarmic::HaltReason step(uaddr addr) = 0;
+    virtual dynarmic::HaltReason execute(Optional<uaddr> addr = {}) = 0;
+    virtual dynarmic::HaltReason step(Optional<uaddr> addr = {}) = 0;
     virtual void runInitializers() {}
     virtual void runFinalizers() {}
 

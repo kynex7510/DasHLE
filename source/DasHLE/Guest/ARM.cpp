@@ -11,13 +11,10 @@ struct ELFConfig : binary::elf::Config32, binary::elf::ConfigLE {
 
 using Binary = binary::Binary<ELFConfig>;
 
-constexpr static usize PAGE_SIZE = 0x1000; // 4KB
-constexpr static usize STACK_SIZE = 1024 * 1024; // 1MB
-
 constexpr static u32 cpsrThumbEnable(u32 cpsr) { return cpsr | 0x30u; }
 constexpr static u32 cpsrThumbDisable(u32 cpsr) { return cpsr & ~(0x30u); }
-constexpr static bool isThumb(uaddr addr) { return addr & 1u; }
-constexpr static uaddr clearThumb(uaddr addr) { return addr & ~(1u); }
+constexpr static bool isThumb(u32 addr) { return addr & 1u; }
+constexpr static u32 clearThumb(u32 addr) { return addr & ~(1u); }
 
 // Environment
 
@@ -38,10 +35,20 @@ struct VMImpl::Environment final : public dynarmic32::UserCallbacks {
     }
 
     Expected<uaddr> virtualToHostChecked(uaddr vaddr, usize flags) const {
-        if constexpr(DEBUG_MODE) {
+        constexpr bool verbose = true;
+        if constexpr(dashle::DEBUG_MODE) {
             flags &= host::memory::flags::PERM_MASK;
             const auto block = m_Mem->blockFromVAddr(vaddr);
+            if (verbose && !block) {
+                DASHLE_LOG_LINE("Block not found (vaddr=0x{:X}, expected={})", vaddr, flags);
+                DASHLE_LOG_LINE("Gonna assert wawa");
+            }
             DASHLE_ASSERT(block);
+            if (verbose && !(block.value()->flags & flags)) {
+                DASHLE_LOG_LINE("Invalid flags (expected={}, found={})", flags, block.value()->flags);
+                DASHLE_LOG_LINE("Trying to read 0x{:X}", vaddr);
+                DASHLE_LOG_LINE("Gonna assert wawa");
+            }
             DASHLE_ASSERT(block.value()->flags & flags);
         }
 
@@ -164,14 +171,14 @@ void VMImpl::setupJit(binary::Version version) {
     case Armeabi:
         cfg.arch_version = dynarmic32::ArchVersion::v5TE;
         break;
-        case Armeabi_v7a:
+    case Armeabi_v7a:
         cfg.arch_version = dynarmic32::ArchVersion::v7;
         break;
     default:
         DASHLE_UNREACHABLE("Invalid binary version!");
     }
 
-    if constexpr(DEBUG_MODE)
+    if constexpr(dashle::DEBUG_MODE)
         cfg.optimizations = dynarmic::no_optimizations;
     else
         cfg.optimizations = dynarmic::all_safe_optimizations;
@@ -200,37 +207,68 @@ VMImpl::VMImpl(std::shared_ptr<host::memory::MemoryManager> mem, std::shared_ptr
     m_ExMon = std::make_unique<dynarmic::ExclusiveMonitor>(1);
 
     // Allocate stack.
-    DASHLE_ASSERT_WRAPPER_CONST(block, mem->allocate(mem->maxMemory() - STACK_SIZE, STACK_SIZE,
-        host::memory::flags::PERM_READ_WRITE | host::memory::flags::FORCE_HINT));
+    DASHLE_ASSERT_WRAPPER_CONST(block, mem->allocate({
+        .size = STACK_SIZE,
+        .alignment = PAGE_SIZE,
+        .hint = mem->virtualOffset() + mem->maxMemory() - STACK_SIZE,
+        .flags = host::memory::flags::PERM_READ_WRITE | host::memory::flags::FORCE_HINT
+    }));
     m_StackBase = block->virtualBase;
     m_StackTop = m_StackBase + block->size;
 }
 
 VMImpl::~VMImpl() {} // Required to override the default dtor.
 
+struct LoadSegmentInfo {
+    usize fileDataOffset; // Offset in the file for the first byte of this segment.
+    usize fileDataSize; // Size of the data to read from file.
+    usize memDataOffset; // Offset in memory for the first byte of this segment.
+    usize allocOffset; // Offset in memory where this segment starts.
+    usize allocSize; // Size for the memory allocation.
+    usize permissions; // Permission flags.
+};
+
 Expected<void> VMImpl::loadBinary(const std::span<const u8> buffer) {
     Binary binary(buffer);
     auto mem = m_Env->m_Mem;
 
-    // Allocate and map segments.
-    std::vector<std::pair<uaddr, usize>> secBases;
+    // Get ELF LOAD segments.
+    std::vector<LoadSegmentInfo> loadSegmentsInfo;
     DASHLE_TRY_EXPECTED_CONST(loadSegments, binary.segments(binary::elf::PT_LOAD));
-    // TODO: ensure this is page aligned.
-    DASHLE_TRY_EXPECTED_CONST(binaryBase, mem->findFreeAddr(0u));
+    usize binaryAllocSize = 0u;
 
     for (const auto segment : loadSegments) {
-        DASHLE_TRY_EXPECTED_CONST(allocBase, binary.segmentAllocBase(segment));
+        // p_vaddr is the offset in memory for the first byte of the segment.
+        // allocOffset is p_vaddr but aligned down, so the offset in memory for the segment start.
+        DASHLE_TRY_EXPECTED_CONST(allocOffset, binary.segmentAllocOffset(segment));
         DASHLE_TRY_EXPECTED_CONST(allocSize, binary.segmentAllocSize(segment));
-        DASHLE_TRY_EXPECTED_CONST(block, mem->allocate(binaryBase + allocBase, allocSize,
-            host::memory::flags::PERM_READ_WRITE | host::memory::flags::FORCE_HINT));
+        binaryAllocSize += allocSize;
+        loadSegmentsInfo.emplace_back(LoadSegmentInfo {
+            .fileDataOffset = segment->p_offset,
+            .fileDataSize = segment->p_filesz,
+            .memDataOffset = segment->p_vaddr - allocOffset,
+            .allocOffset = allocOffset,
+            .allocSize = allocSize,
+            .permissions = binary.wrapPermissionFlags(segment->p_flags)
+        });
+    }
 
-        // Host offset is the memory offset for the first byte, relative to the allocation base.
-        DASHLE_ASSERT(segment->p_filesz < block->size);
-        std::copy(buffer.data() + segment->p_offset,
-            buffer.data() + segment->p_offset + segment->p_filesz,
-            reinterpret_cast<u8*>(block->hostBase) + (segment->p_vaddr - allocBase));
+    // Get binary base.
+    DASHLE_TRY_EXPECTED_CONST(binaryBase, mem->findFreeAddr(binaryAllocSize, PAGE_SIZE));
+    DASHLE_LOG_LINE("Binary base: 0x{:X}", binaryBase);
 
-        secBases.push_back({ block->virtualBase, binary.wrapPermissionFlags(segment->p_flags) });
+    // Allocate and map each segment.
+    for (const auto& segmentInfo : loadSegmentsInfo) {
+        DASHLE_TRY_EXPECTED_CONST(block, mem->allocate({
+            .size = segmentInfo.allocSize,
+            .alignment = PAGE_SIZE,
+            .hint = binaryBase + segmentInfo.allocOffset,
+            .flags = host::memory::flags::PERM_READ_WRITE | host::memory::flags::FORCE_HINT,
+        }));
+
+        std::copy(buffer.data() + segmentInfo.fileDataOffset,
+            buffer.data() + segmentInfo.fileDataOffset + segmentInfo.fileDataSize,
+            reinterpret_cast<u8*>(block->hostBase) + segmentInfo.memDataOffset);
     }
 
     // Handle relocations.
@@ -259,8 +297,8 @@ Expected<void> VMImpl::loadBinary(const std::span<const u8> buffer) {
     }
 
     // Set memory permissions.
-    for (const auto [vbase, flags] : secBases) {
-        DASHLE_TRY_EXPECTED_VOID(mem->setFlags(vbase, flags));
+    for (const auto& segmentInfo : loadSegmentsInfo) {
+        DASHLE_TRY_EXPECTED_VOID(mem->setFlags(binaryBase + segmentInfo.allocOffset, segmentInfo.permissions));
     }
 
     // Get initializers and finalizers.
@@ -298,46 +336,50 @@ Expected<uaddr> VMImpl::virtualToHost(uaddr vaddr) const {
     return m_Env->virtualToHost(vaddr);
 }
 
-uaddr VMImpl::invalidAddr() const {
-    return m_Env->m_Mem->invalidAddr();
-}
-
-dynarmic::HaltReason VMImpl::execute(uaddr addr) {
+dynarmic::HaltReason VMImpl::execute(Optional<uaddr> wrappedAddr) {
     DASHLE_ASSERT(m_Jit);
-    const auto stopAddr = invalidAddr();
 
-    if (addr == stopAddr)
+    if (!wrappedAddr)
         return m_Jit->Run();
-    
-    m_Jit->Regs()[regs::LR] = clearThumb(stopAddr);
+
+    DASHLE_ASSERT_WRAPPER_CONST(addr, wrappedAddr);
     setPC(addr);
 
     auto reason = EXEC_SUCCESS;
+    DASHLE_LOG_LINE("Running at addr = 0x{:X}", addr);
     while (reason == EXEC_SUCCESS) {
         reason = m_Jit->Run();
-        if (m_Jit->Regs()[regs::PC] == clearThumb(stopAddr))
-            break;
+        DASHLE_LOG_LINE("PC: 0x{:X}, LR: 0x{:X}", m_Jit->Regs()[regs::PC], m_Jit->Regs()[regs::LR]);
+        //if (m_Jit->Regs()[regs::PC] == clearThumb(stopAddr))
+        //    break;
     }
 
     return reason;
 }
 
-dynarmic::HaltReason VMImpl::step(uaddr addr) {
+dynarmic::HaltReason VMImpl::step(Optional<uaddr> wrappedAddr) {
     DASHLE_ASSERT(m_Jit);
-    const auto stopAddr = invalidAddr();
 
-    if (addr != stopAddr)
+    if (wrappedAddr) {
+        DASHLE_ASSERT_WRAPPER_CONST(addr, wrappedAddr);
         setPC(addr);
+    }
 
     return m_Jit->Step();
 }
 
 void VMImpl::runInitializers() {
+    if (auto reason = execute(m_Initializers[0]); reason != EXEC_SUCCESS) {
+        dump();
+        DASHLE_UNREACHABLE("Init call failed (reason={})", static_cast<u32>(reason));
+    }
+    /*
     for (auto vaddr : m_Initializers) {
         if (auto reason = execute(vaddr); reason != EXEC_SUCCESS) {
             DASHLE_UNREACHABLE("Init call failed (vaddr=0x{:X}, reason={})", vaddr, static_cast<u32>(reason));
         }
     }
+    */
 }
 
 void VMImpl::setRegister(usize id, u64 value) {
@@ -377,7 +419,7 @@ u64 VMImpl::getRegister(usize id) const {
 }
 
 void VMImpl::dump() const {
-    if constexpr(DEBUG_MODE) {
+    if constexpr(dashle::DEBUG_MODE) {
         DASHLE_ASSERT(m_Jit);
 
         constexpr const char* LABELS[] = {

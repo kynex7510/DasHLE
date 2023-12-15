@@ -20,7 +20,6 @@ Expected<std::unique_ptr<GuestVM>> dashle::guest::makeVMFromBuffer(const std::sp
         return Unexpected(Error::InvalidArgument);
 
     DASHLE_TRY_OPTIONAL_CONST(arch, binary::elf::detectArch(buffer), Error::InvalidArch);
-
     switch (arch) {
         case binary::elf::constants::EM_ARM:
             vm = std::make_unique<arm::VMImpl>(args.mem, args.interop, args.resolver);
