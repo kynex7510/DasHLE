@@ -232,7 +232,10 @@ VMImpl::VMImpl(std::shared_ptr<host::memory::MemoryManager> mem, std::shared_ptr
     m_StackTop = m_StackBase + block->size;
 }
 
-VMImpl::~VMImpl() {} // Required to override the default dtor.
+VMImpl::~VMImpl() {
+    auto mem = m_Env->m_Mem;
+    DASHLE_ASSERT(mem->free(m_StackBase));
+}
 
 struct LoadSegmentInfo {
     usize fileDataOffset; // Offset in the file for the first byte of this segment.

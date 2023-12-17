@@ -12,19 +12,14 @@ InteropHandler::InteropHandler(std::shared_ptr<host::memory::MemoryManager> mem,
     : m_Mem(mem), m_MaxEntries(maxEntries) {
     DASHLE_ASSERT(maxEntries);
 
-    // TODO: Which prot to use?
     DASHLE_ASSERT_WRAPPER_CONST(block, m_Mem->allocate({
         .size = m_MaxEntries * ENTRY_SIZE,
-        .flags = host::memory::flags::PERM_READ_WRITE
+        .flags = 0u,
     }));
     m_TableBase = block->virtualBase;
 }
 
-InteropHandler::~InteropHandler() {
-    if (m_TableBase) {
-        DASHLE_ASSERT(m_Mem->free(m_TableBase));
-    }
-}
+InteropHandler::~InteropHandler() { DASHLE_ASSERT(m_Mem->free(m_TableBase)); }
 
 Expected<uaddr> InteropHandler::registerEmitterCallback(EmitterCallback cb) {
     if (m_Emitters.size() >= m_MaxEntries)

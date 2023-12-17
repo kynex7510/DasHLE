@@ -299,7 +299,9 @@ Expected<const AllocatedBlock*> MemoryManager::allocate(const AllocArgs& args) {
         }
     }
 
-    // At this point allocIt is always valid.
+    // At this point allocIt has to be valid.
+    DASHLE_ASSERT(allocIt != freeBlocks.end());
+
     // Allocate block in memory.
     auto freeBlockNode = freeBlocks.extract(allocIt);
     auto& freeBlock = freeBlockNode.value();
@@ -380,10 +382,10 @@ Expected<void> MemoryManager::free(uaddr vbase) {
     } else {
         // Handle the case where this is the first allocated block of the set but not the first block in
         // the address space (ie. address space starts with a free block).
-        if (it->virtualBase != 0u) {
+        if (it->virtualBase != virtualOffset()) {
             const auto firstFreeBlock = FreeBlock{
-                .virtualBase = 0u,
-                .size = it->virtualBase
+                .virtualBase = virtualOffset(),
+                .size = it->virtualBase -virtualOffset(),
             };
             handleBlock(freeBlocks, firstFreeBlock, true);
         }
@@ -402,11 +404,11 @@ Expected<void> MemoryManager::free(uaddr vbase) {
     } else {
         // Handle the case where this is the last allocated block, but not the last in memory (ie. last
         // block is a free one).
-        if ((it->virtualBase + it->size) != maxMemory()) {
+        if ((it->virtualBase + it->size) != (virtualOffset() + maxMemory())) {
             const auto thisAllocBlockEnd = it->virtualBase + it->size;
             const auto lastFreeBlock = FreeBlock{
                 .virtualBase = thisAllocBlockEnd,
-                .size = maxMemory() - thisAllocBlockEnd
+                .size = (virtualOffset() + maxMemory()) - thisAllocBlockEnd
             };
             handleBlock(freeBlocks, lastFreeBlock, false);
         }
