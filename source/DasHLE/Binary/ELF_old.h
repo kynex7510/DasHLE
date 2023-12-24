@@ -1,8 +1,10 @@
-#ifndef _DASHLE_BINARY_BINARY_H
-#define _DASHLE_BINARY_BINARY_H
+#ifndef _DASHLE_BINARY_ELF_H
+#define _DASHLE_BINARY_ELF_H
 
 #include "DasHLE/Host/Memory.h"
-#include "DasHLE/Binary/ELF.h"
+//#include "DasHLE/Binary/ELFDefs.h"
+
+#include <vector>
 
 namespace dashle::binary {
 
@@ -10,7 +12,7 @@ namespace dashle::binary {
 
 template <elf::ConfigType CFG>
 class Binary final {
-    const std::span<const u8> m_Buffer;
+    const std::vector<u8> m_Buffer;
     const typename CFG::HeaderType* m_Header;
     std::vector<RelocInfo> m_Relocs;
 
@@ -118,49 +120,19 @@ class Binary final {
         return EXPECTED_VOID;
     }
 
-    Expected<void> visitJmprel() {
-        const auto jmprelEntry = dynEntry(elf::DT_JMPREL);
-        const auto jmprelEntrySize = dynEntry(elf::DT_PLTRELSZ);
-        const auto jmprelEntryType = dynEntry(elf::DT_PLTREL);
 
-        if (!jmprelEntry || !jmprelEntrySize || !jmprelEntryType)
-            return EXPECTED_VOID;
-
-        if (jmprelEntryType.value()->d_un.d_val == elf::DT_REL) {
-            const auto jmprelArray = reinterpret_cast<CFG::RelType*>(base() + jmprelEntry.value()->d_un.d_ptr);
-            const usize size = jmprelEntrySize.value()->d_un.d_val / sizeof(typename CFG::RelType);   
-            return visitRelArray(jmprelArray, size);
-        }
-
-        if (jmprelEntryType.value()->d_un.d_val == elf::DT_RELA) {
-            const auto jmprelArray = reinterpret_cast<CFG::RelaType*>(base() + jmprelEntry.value()->d_un.d_ptr);
-            const usize size = jmprelEntrySize.value()->d_un.d_val / sizeof(typename CFG::RelaType);
-            return visitRelaArray(jmprelArray, size);
-        }
-
-        return Unexpected(Error::InvalidRelocation);
-    }
-
-    Expected<void> visitRelocations() {
-        return visitRel().and_then([this] {
-            return visitRela();
-        }).and_then([this] {
-            return visitJmprel();
-        });
-    }
 
 public:
-    Binary(const std::span<const u8> buffer) : m_Buffer(buffer) {
+    Binary(std::vector<u8>&& buffer) : m_Buffer(buffer) {
         DASHLE_ASSERT_WRAPPER_CONST(header, elf::getHeader<CFG>(m_Buffer));
         m_Header = header;
-        DASHLE_ASSERT(visitRelocations());
+        DASHLE_ASSERT(visitRelocs());
     }
 
     const std::vector<RelocInfo>& relocs() { return m_Relocs; }
 };
-
 */
 
 } // dashle::binary
 
-#endif /* _DASHLE_BINARY_BINARY_H */
+#endif /* _DASHLE_ELF_H */

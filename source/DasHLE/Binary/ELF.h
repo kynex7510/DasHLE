@@ -1,7 +1,8 @@
 #ifndef _DASHLE_BINARY_ELF_H
 #define _DASHLE_BINARY_ELF_H
 
-#include "DasHLE/Base.h"
+#include "DasHLE/Support.h"
+#include "DasHLE/Host/Memory.h"
 
 #include <span>
 #include <vector>
@@ -9,8 +10,6 @@
 #include <algorithm>
 
 namespace dashle::binary::elf {
-
-namespace constants {
 
 constexpr static usize EI_NIDENT = 16;
 constexpr static usize EI_CLASS = 4;
@@ -70,165 +69,155 @@ constexpr static auto R_AARCH64_GLOB_DAT = 1025;
 constexpr static auto R_AARCH64_JUMP_SLOT = 1026;
 constexpr static auto R_AARCH64_RELATIVE = 1027;
 
-} // namespace dashle::binary::elf::constants
+/* Raw types */
 
-using namespace constants;
+using Half = u16;
+using Word = u32;
+using Sword = s32;
+using Xword = u64;
+using Sxword = s64;
+using Addr32 = u32;
+using Addr64 = u64;
+using Off32 = u32;
+using Off64 = u64;
+using Section = u16;
+using Versym = Half;
 
-using Elf32_Half = u16;
-using Elf32_Word = u32;
-using Elf32_Sword = s32;
-using Elf32_Xword = u64;
-using Elf32_Sxword = s64;
-using Elf32_Addr = u32;
-using Elf32_Off = u32;
-using Elf32_Section = u16;
-using Elf32_Versym = Elf32_Half;
-
-using Elf64_Half = u16;
-using Elf64_Word = u32;
-using Elf64_Sword = s32;
-using Elf64_Xword = u64;
-using Elf64_Sxword = s64;
-using Elf64_Addr = u64;
-using Elf64_Off = u64;
-using Elf64_Section = u16;
-using Elf64_Versym = Elf64_Half;
-
-struct Elf32_Ehdr {
+struct Ehdr32 {
     u8 e_ident[EI_NIDENT];
-    Elf32_Half e_type;
-    Elf32_Half e_machine;
-    Elf32_Word e_version;
-    Elf32_Addr e_entry;
-    Elf32_Off e_phoff;
-    Elf32_Off e_shoff;
-    Elf32_Word e_flags;
-    Elf32_Half e_ehsize;
-    Elf32_Half e_phentsize;
-    Elf32_Half e_phnum;
-    Elf32_Half e_shentsize;
-    Elf32_Half e_shnum;
-    Elf32_Half e_shstrndx;
+    Half e_type;
+    Half e_machine;
+    Word e_version;
+    Addr32 e_entry;
+    Off32 e_phoff;
+    Off32 e_shoff;
+    Word e_flags;
+    Half e_ehsize;
+    Half e_phentsize;
+    Half e_phnum;
+    Half e_shentsize;
+    Half e_shnum;
+    Half e_shstrndx;
 };
 
-static_assert(sizeof(Elf32_Ehdr) == 0x34);
+static_assert(sizeof(Ehdr32) == 0x34);
 
-struct Elf64_Ehdr {
+struct Ehdr64 {
     u8 e_ident[EI_NIDENT];
-    Elf64_Half e_type;
-    Elf64_Half e_machine;
-    Elf64_Word e_version;
-    Elf64_Addr e_entry;
-    Elf64_Off e_phoff;
-    Elf64_Off e_shoff;
-    Elf64_Word e_flags;
-    Elf64_Half e_ehsize;
-    Elf64_Half e_phentsize;
-    Elf64_Half e_phnum;
-    Elf64_Half e_shentsize;
-    Elf64_Half e_shnum;
-    Elf64_Half e_shstrndx;
+    Half e_type;
+    Half e_machine;
+    Word e_version;
+    Addr64 e_entry;
+    Off64 e_phoff;
+    Off64 e_shoff;
+    Word e_flags;
+    Half e_ehsize;
+    Half e_phentsize;
+    Half e_phnum;
+    Half e_shentsize;
+    Half e_shnum;
+    Half e_shstrndx;
 };
 
-static_assert(sizeof(Elf64_Ehdr) == 0x40);
+static_assert(sizeof(Ehdr64) == 0x40);
 
-struct Elf32_Phdr {
-    Elf32_Word p_type;
-    Elf32_Off p_offset;
-    Elf32_Addr p_vaddr;
-    Elf32_Addr p_paddr;
-    Elf32_Word p_filesz;
-    Elf32_Word p_memsz;
-    Elf32_Word p_flags;
-    Elf32_Word p_align;
+struct Shdr32 {
+    Word sh_name;
+    Word sh_type;
+    Word sh_flags;
+    Addr32 sh_addr;
+    Off32 sh_offset;
+    Word sh_size;
+    Word sh_link;
+    Word sh_info;
+    Word sh_addralign;
+    Word sh_entsize;
 };
 
-static_assert(sizeof(Elf32_Phdr) == 0x20);
+static_assert(sizeof(Shdr32) == 0x28);
 
-struct Elf64_Phdr {
-    Elf64_Word p_type;
-    Elf64_Word p_flags;
-    Elf64_Off p_offset;
-    Elf64_Addr p_vaddr;
-    Elf64_Addr p_paddr;
-    Elf64_Xword p_filesz;
-    Elf64_Xword p_memsz;
-    Elf64_Xword p_align;
+struct Shdr64 {
+    Word sh_name;
+    Word sh_type;
+    Xword sh_flags;
+    Addr64 sh_addr;
+    Off64 sh_offset;
+    Xword sh_size;
+    Word sh_link;
+    Word sh_info;
+    Xword sh_addralign;
+    Xword sh_entsize;
 };
 
-static_assert(sizeof(Elf64_Phdr) == 0x38);
+static_assert(sizeof(Shdr64) == 0x40);
 
-struct Elf32_Shdr {
-    Elf32_Word sh_name;
-    Elf32_Word sh_type;
-    Elf32_Word sh_flags;
-    Elf32_Addr sh_addr;
-    Elf32_Off sh_offset;
-    Elf32_Word sh_size;
-    Elf32_Word sh_link;
-    Elf32_Word sh_info;
-    Elf32_Word sh_addralign;
-    Elf32_Word sh_entsize;
+struct Phdr32 {
+    Word p_type;
+    Off32 p_offset;
+    Addr32 p_vaddr;
+    Addr32 p_paddr;
+    Word p_filesz;
+    Word p_memsz;
+    Word p_flags;
+    Word p_align;
 };
 
-static_assert(sizeof(Elf32_Shdr) == 0x28);
+static_assert(sizeof(Phdr32) == 0x20);
 
-struct Elf64_Shdr {
-    Elf64_Word sh_name;
-    Elf64_Word sh_type;
-    Elf64_Xword sh_flags;
-    Elf64_Addr sh_addr;
-    Elf64_Off sh_offset;
-    Elf64_Xword sh_size;
-    Elf64_Word sh_link;
-    Elf64_Word sh_info;
-    Elf64_Xword sh_addralign;
-    Elf64_Xword sh_entsize;
+struct Phdr64 {
+    Word p_type;
+    Word p_flags;
+    Off64 p_offset;
+    Addr64 p_vaddr;
+    Addr64 p_paddr;
+    Xword p_filesz;
+    Xword p_memsz;
+    Xword p_align;
 };
 
-static_assert(sizeof(Elf64_Shdr) == 0x40);
+static_assert(sizeof(Phdr64) == 0x38);
 
-struct Elf32_Dyn {
-    Elf32_Sword d_tag;
+struct Dyn32 {
+    Sword d_tag;
     union {
-        Elf32_Word d_val;
-        Elf32_Addr d_ptr;
+        Word d_val;
+        Addr32 d_ptr;
     } d_un;
 };
 
-static_assert(sizeof(Elf32_Dyn) == 0x08);
+static_assert(sizeof(Dyn32) == 0x08);
 
-struct Elf64_Dyn {
-    Elf64_Sxword d_tag;
+struct Dyn64 {
+    Sxword d_tag;
     union {
-        Elf64_Xword d_val;
-        Elf64_Addr d_ptr;
+        Xword d_val;
+        Addr64 d_ptr;
     } d_un;
 };
 
-static_assert(sizeof(Elf64_Dyn) == 0x10);
+static_assert(sizeof(Dyn64) == 0x10);
 
-struct Elf32_Sym {
-    Elf32_Word st_name;
-    Elf32_Addr st_value;
-    Elf32_Word st_size;
-    unsigned char st_info;
-    unsigned char st_other;
-    Elf32_Section st_shndx;
+struct Sym32 {
+    Word st_name;
+    Addr32 st_value;
+    Word st_size;
+    u8 st_info;
+    u8 st_other;
+    Section st_shndx;
 };
 
-static_assert(sizeof(Elf32_Sym) == 0x10);
+static_assert(sizeof(Sym32) == 0x10);
 
-struct Elf64_Sym {
-  Elf64_Word st_name;
-  unsigned char st_info;
-  unsigned char st_other;
-  Elf64_Section st_shndx;
-  Elf64_Addr st_value;
-  Elf64_Xword st_size;
+struct Sym64 {
+  Word st_name;
+  u8 st_info;
+  u8 st_other;
+  Section st_shndx;
+  Addr64 st_value;
+  Xword st_size;
 };
 
-static_assert(sizeof(Elf64_Sym) == 0x18);
+static_assert(sizeof(Sym64) == 0x18);
 
 template <typename T>
 concept RelConstraint = requires(T a) {
@@ -237,283 +226,270 @@ concept RelConstraint = requires(T a) {
 };
 
 struct Elf32_Rel {
-    Elf32_Addr r_offset;
-    Elf32_Word r_info;
+    Addr32 r_offset;
+    Word r_info;
 
-    Elf32_Word type() const { return r_info & 0xFF; }
-    Elf32_Word symbolIndex() const { return r_info >> 8; }
+    Word type() const { return r_info & 0xFF; }
+    Word symbolIndex() const { return r_info >> 8; }
 };
 
 static_assert(sizeof(Elf32_Rel) == 0x08 && RelConstraint<Elf32_Rel>);
 
 struct Elf32_Rela : Elf32_Rel {
-    Elf32_Sword r_addend;
+    Sword r_addend;
 };
 
 static_assert(sizeof(Elf32_Rela) == 0x0C);
 
 struct Elf64_Rel {
-    Elf64_Addr r_offset;
-    Elf64_Xword	r_info;
+    Addr64 r_offset;
+    Xword	r_info;
 
-    Elf64_Xword type() const { return r_info & 0xFFFFFFFF; }
-    Elf64_Xword symbolIndex() const { return r_info >> 32; }
+    Xword type() const { return r_info & 0xFFFFFFFF; }
+    Xword symbolIndex() const { return r_info >> 32; }
 };
 
 static_assert(sizeof(Elf64_Rel) == 0x10 && RelConstraint<Elf64_Rel>);
 
 struct Elf64_Rela : Elf64_Rel {
-    Elf64_Sxword r_addend;
+    Sxword r_addend;
 };
 
 static_assert(sizeof(Elf64_Rela) == 0x18);
 
-template <typename T>
-concept HalfWordType = std::same_as<T, Elf32_Half> || std::same_as<T, Elf64_Half>;
+/* Wrappers */
 
-template <typename T>
-concept WordType = std::same_as<T, Elf32_Word> || std::same_as<T, Elf64_Word>;
-
-template <typename T>
-concept SwordType = std::same_as<T, Elf32_Sword> || std::same_as<T, Elf64_Sword>;
-
-template <typename T>
-concept AddrType = std::same_as<T, Elf32_Addr> || std::same_as<T, Elf64_Addr>;
-
-template <typename T>
-concept OffsetType = std::same_as<T, Elf32_Off> || std::same_as<T, Elf64_Off>;
-
-template <typename T>
-concept HeaderType = std::same_as<T, Elf32_Ehdr> || std::same_as<T, Elf64_Ehdr>;
-
-template <typename T>
-concept ProgramHeaderType = std::same_as<T, Elf32_Phdr> || std::same_as<T, Elf64_Phdr>;
-
-template <typename T>
-concept SectionHeaderType = std::same_as<T, Elf32_Shdr> || std::same_as<T, Elf64_Shdr>;
-
-template <typename T>
-concept DynType = std::same_as<T, Elf32_Dyn> || std::same_as<T, Elf64_Dyn>;
-
-template <typename T>
-concept SymType = std::same_as<T, Elf32_Sym> || std::same_as<T, Elf64_Sym>;
-
-template <typename T>
-concept RelType = std::same_as<T, Elf32_Rel> || std::same_as<T, Elf64_Rel>;
-
-template <typename T>
-concept RelaType = std::same_as<T, Elf32_Rela> || std::same_as<T, Elf64_Rela>;
-
-template <typename T>
-concept ConfigType = HalfWordType<typename T::HalfWordType> &&
-    WordType<typename T::WordType> &&
-    SwordType<typename T::SwordType> &&
-    AddrType<typename T::AddrType> &&
-    OffsetType<typename T::OffsetType> &&
-    HeaderType<typename T::HeaderType> &&
-    ProgramHeaderType<typename T::ProgramHeaderType> &&
-    SectionHeaderType<typename T::SectionHeaderType> &&
-    DynType<typename T::DynType> &&
-    SymType<typename T::SymType> &&
-    RelType<typename T::RelType> &&
-    RelaType<typename T::RelaType> &&
-    requires 
-{
-    { T::ARCH } -> std::convertible_to<typename T::WordType>;
-    { T::OBJECT_CLASS } -> std::convertible_to<typename T::WordType>;
-    { T::DATA_ENCODING } -> std::convertible_to<typename T::WordType>;
+struct IHeader {
+    virtual u8* ident() const = 0;
+    virtual Half type() const = 0;
+    virtual Half machine() const = 0;
+    virtual Word version() const = 0;
+    virtual Addr64 entry() const = 0;
+    virtual Off64 phoff() const = 0;
+    virtual Off64 shoff() const = 0;
+    virtual Word flags() const = 0;
+    virtual Half ehsize() const = 0;
+    virtual Half phentsize() const = 0;
+    virtual Half phnum() const = 0;
+    virtual Half shentsize() const = 0;
+    virtual Half shnum() const = 0;
+    virtual Half shstrndx() const = 0;
 };
 
-template <ConfigType CFG>
-using Segments = std::vector<const typename CFG::ProgramHeaderType*>;
-
-// template <ConfigType CFG>
-// using Sections = std::vector<const typename CFG::SectionHeaderType*>;
-
-template <ConfigType CFG>
-using DynEntries = std::vector<const typename CFG::DynType*>;
-
-struct Config32 {
-    using HeaderType = Elf32_Ehdr;
-    using ProgramHeaderType = Elf32_Phdr;
-    using SectionHeaderType = Elf32_Shdr;
-    using DynType = Elf32_Dyn;
-    using SymType = Elf32_Sym;
-    using HalfWordType = Elf32_Half;
-    using WordType = Elf32_Word;
-    using SwordType = Elf32_Sword;
-    using AddrType = Elf32_Addr;
-    using OffsetType = Elf32_Off;
-    using RelType = Elf32_Rel;
-    using RelaType = Elf32_Rela;
-    static constexpr auto OBJECT_CLASS = ELFCLASS32;
+struct ISectionHeader {
+    virtual Word name() const = 0;
+    virtual Word type() const = 0;
+    virtual Xword flags() const = 0;
+    virtual Addr64 addr() const = 0;
+    virtual Off64 offset() const = 0;
+    virtual Xword size() const = 0;
+    virtual Word link() const = 0;
+    virtual Word info() const = 0;
+    virtual Xword addralign() const = 0;
+    virtual Xword entsize() const = 0;
 };
 
-struct Config64 {
-    using HeaderType = Elf64_Ehdr;
-    using ProgramHeaderType = Elf64_Phdr;
-    using SectionHeaderType = Elf64_Shdr;
-    using DynType = Elf64_Dyn;
-    using SymType = Elf32_Sym;
-    using HalfWordType = Elf64_Half;
-    using WordType = Elf64_Word;
-    using SwordType = Elf64_Sword;
-    using AddrType = Elf64_Addr;
-    using OffsetType = Elf64_Off;
-    using RelType = Elf64_Rel;
-    using RelaType = Elf64_Rela;
-    static constexpr auto OBJECT_CLASS = ELFCLASS64;
+struct IProgramHeader {
+    virtual Word type() const = 0;
+    virtual Word flags() const = 0;
+    virtual Off64 offset() const = 0;
+    virtual Addr64 vaddr() const = 0;
+    virtual Addr64 paddr() const = 0;
+    virtual Xword filesz() const = 0;
+    virtual Xword memsz() const = 0;
+    virtual Xword align() const = 0;
+
+    Expected<uaddr> allocationOffset() const;
+    Expected<usize> allocationSize() const;
 };
 
-struct ConfigLE {
-    static constexpr auto DATA_ENCODING = ELFDATA2LSB;
+struct IDynEntry {
+    virtual Sxword tag() const = 0;
+    virtual Xword val() const = 0;
+    virtual Addr64 ptr() const = 0;
 };
 
-struct ConfigBE {
-    static constexpr auto DATA_ENCODING = ELFDATA2MSB;
+namespace _internal {
+
+template <typename T>
+requires (OneOf<T, Ehdr32, Ehdr64>)
+class HeaderImpl final : public IHeader {
+    const T* m_Ptr = nullptr;
+
+    u8* ident() const override { return m_Ptr->e_ident; }
+    Half type() const override { return m_Ptr->e_type; }
+    Half machine() const override { return m_Ptr->e_machine; }
+    Word version() const override { return m_Ptr->e_version; }
+    Addr64 entry() const override { return m_Ptr->e_entry; }
+    Off64 phoff() const override { return m_Ptr->e_phoff; }
+    Off64 shoff() const override { return m_Ptr->e_shoff; }
+    Word flags() const override { return m_Ptr->e_flags; }
+    Half ehsize() const override { return m_Ptr->e_ehsize; }
+    Half phentsize() const override { return m_Ptr->e_phentsize; }
+    Half phnum() const override { return m_Ptr->e_phnum; }
+    Half shentsize() const override { return m_Ptr->e_shentsize; }
+    Half shnum() const override { return m_Ptr->e_shnum; }
+    Half shstrndx() const override { return m_Ptr->e_shstrndx; }
+
+public:
+    HeaderImpl(const T* ptr) : m_Ptr(ptr) { DASHLE_ASSERT(m_Ptr); }
 };
 
-inline Optional<usize> detectArch(const std::span<const u8> buffer) {
-    if (buffer.size() >= sizeof(Elf32_Ehdr)) {
-        const auto header = reinterpret_cast<const Elf32_Ehdr*>(buffer.data());
-        return header->e_machine;
-    }
+template <typename T>
+requires (OneOf<T, Shdr32, Shdr64>)
+class SectionHeaderImpl final : public ISectionHeader {
+    const T* m_Ptr = nullptr;
 
-    return {};
+    Word name() const override { return m_Ptr->sh_name; }
+    Word type() const override { return m_Ptr->sh_type; }
+    Xword flags() const override { return m_Ptr->sh_flags; }
+    Addr64 addr() const override { return m_Ptr->sh_addr; }
+    Off64 offset() const override { return m_Ptr->sh_offset; }
+    Xword size() const override { return m_Ptr->sh_size; }
+    Word link() const override { return m_Ptr->sh_link; }
+    Word info() const override { return m_Ptr->sh_info; }
+    Xword addralign() const override { m_Ptr->sh_addralign; }
+    Xword entsize() const override { m_Ptr->sh_entsize; }
+
+public:
+    SectionHeaderImpl(const T* ptr) : m_Ptr(ptr) { DASHLE_ASSERT(m_Ptr); }
+};
+
+template <typename T>
+requires (OneOf<T, Phdr32, Phdr64>)
+class ProgramHeaderImpl final : public IProgramHeader {
+    const T* m_Ptr = nullptr;
+
+    Word type() const override { m_Ptr->p_type; }
+    Word flags() const override { m_Ptr->p_flags; }
+    Off64 offset() const override { m_Ptr->p_offset; }
+    Addr64 vaddr() const override { m_Ptr->p_vaddr; }
+    Addr64 paddr() const override { m_Ptr->p_paddr; }
+    Xword filesz() const override { m_Ptr->p_filesz; }
+    Xword memsz() const override { m_Ptr->p_memsz; }
+    Xword align() const override { m_Ptr->p_align; }
+
+public:
+    ProgramHeaderImpl(const T* ptr) : m_Ptr(ptr) { DASHLE_ASSERT(m_Ptr); }
+};
+
+template <typename T>
+requires (OneOf<T, Dyn32, Dyn64>)
+class DynEntryImpl : public IDynEntry {
+    const T* m_Ptr = nullptr;
+
+    Sxword tag() const override { m_Ptr->d_tag; }
+    Xword val() const override { m_Ptr->d_un.d_val; }
+    Addr64 ptr() const override { m_Ptr->d_un.d_ptr; }
+
+public:
+    DynEntryImpl(const T* ptr) : m_Ptr(ptr) { DASHLE_ASSERT(m_Ptr); }
+};
+
+} // namespace dashle::binary::elf::_internal
+
+enum class Version {
+    Armeabi,     // v5TE
+    Armeabi_v7a, // v7
+    Arm64_v8a,   // v8
+};
+
+enum class RelocKind {
+    Relative,
+    Symbol,
+};
+
+struct RelocInfo {
+    soff patchOffset;
+    soff addend;
+    RelocKind kind;
+    Optional<std::string> symbolName;
+};
+
+struct FuncArrayInfo {
+    usize offset;
+    usize size;
+};
+
+class ELF final {
+    using Header32 = _internal::HeaderImpl<Ehdr32>;
+    using Header64 = _internal::HeaderImpl<Ehdr64>;
+    using SectionHeader32 = _internal::SectionHeaderImpl<Shdr32>;
+    using SectionHeader64 = _internal::SectionHeaderImpl<Shdr64>;
+    using ProgramHeader32 = _internal::ProgramHeaderImpl<Phdr32>;
+    using ProgramHeader64 = _internal::ProgramHeaderImpl<Phdr64>;
+    using DynEntry32 = _internal::DynEntryImpl<Dyn32>;
+    using DynEntry64 = _internal::DynEntryImpl<Dyn64>;
+
+public:
+    using Header = PolymorphicView<IHeader, Header32, Header64>;
+    using SectionHeader = PolymorphicView<ISectionHeader, SectionHeader32, SectionHeader64>;
+    using ProgramHeader = PolymorphicView<IProgramHeader, ProgramHeader32, ProgramHeader64>;
+    using DynEntry = PolymorphicView<IDynEntry, DynEntry32, DynEntry64>;
+
+private:
+    std::vector<u8> m_Buffer;
+    Version m_Version = Version::Armeabi_v7a;
+    Header m_Header;
+    std::vector<SectionHeader> m_SectionHeaders;
+    std::vector<ProgramHeader> m_ProgramHeaders;
+
+    const auto binaryBase() const { return m_Buffer.data(); }
+
+public:
+    Expected<void> parse(std::vector<u8>&& buffer);
+    Version version() const { return m_Version; }
+    bool is64Bits() const { return version() == Version::Arm64_v8a; }
+
+    Header header() const { return m_Header; }
+
+    const std::span<const SectionHeader> sectionHeaders() const { return m_SectionHeaders; }
+    const std::span<const ProgramHeader> programHeaders() const { return m_ProgramHeaders; }
+    Expected<SectionHeader> sectionHeader(usize index) const;
+    Expected<ProgramHeader> programHeader(usize index) const;
+
+    Expected<std::vector<SectionHeader>> sectionsOfType(Word type) const;
+    Expected<std::vector<ProgramHeader>> segmentsOfType(Word type) const;
+
+    Expected<std::vector<DynEntry>> dynEntriesWithTag(Sword tag) const;
+    Expected<DynEntry> dynEntryWithTag(Sword tag) const;
+
+    Optional<FuncArrayInfo> initArrayInfo() const;
+    Optional<FuncArrayInfo> finiArrayInfo() const;
+};
+
+constexpr usize wrapPermissionFlags(Word flags) {
+    usize perm = 0;
+        
+    if (flags & PF_R)
+        perm |= host::memory::flags::PERM_READ;
+
+    if (flags & PF_W)
+        perm |= host::memory::flags::PERM_WRITE;
+
+    if (flags & PF_X)
+        perm |= host::memory::flags::PERM_EXEC;
+
+    return perm;
 }
 
-template <ConfigType CFG>
-Expected<const typename CFG::HeaderType*> getHeader(const std::span<const u8> buffer) {
-    const auto header = reinterpret_cast<const CFG::HeaderType*>(buffer.data());
+constexpr Word unwrapPermissionFlags(usize perm) {
+    Word flags;
 
-    // Check size.
-    if (buffer.size() < sizeof(typename CFG::HeaderType) || buffer.size() < header->e_ehsize)
-        return Unexpected(Error::InvalidSize);
+    if (perm & host::memory::flags::PERM_READ)
+        flags |= PF_R;
 
-    // Check magic.
-    if (!std::equal(header->e_ident, header->e_ident + SELFMAG, ELFMAG))
-        return Unexpected(Error::InvalidMagic);
+    if (perm & host::memory::flags::PERM_WRITE)
+        flags |= PF_W;
 
-    // Check class.
-    if (header->e_ident[EI_CLASS] != CFG::OBJECT_CLASS)
-        return Unexpected(Error::InvalidClass);
+    if (perm & host::memory::flags::PERM_EXEC)
+        flags |= PF_X;
 
-    // Check data encoding.
-    if (header->e_ident[EI_DATA] != CFG::DATA_ENCODING)
-        return Unexpected(Error::InvalidDataEncoding);
-
-    // Check position indipendent binary.
-    if (header->e_type != ET_DYN)
-        return Unexpected(Error::NoPIE);
-
-    // Check arch.
-    if (header->e_machine != CFG::ARCH)
-        return Unexpected(Error::InvalidArch);
-
-    return header;
-}
-
-template <ConfigType CFG>
-Optional<const typename CFG::ProgramHeaderType*> getProgramHeader(const typename CFG::HeaderType* header) {
-    if (header && header->e_phnum) {
-        const auto base = reinterpret_cast<uaddr>(header);
-        return reinterpret_cast<CFG::ProgramHeaderType*>(base + header->e_phoff);
-    }
-
-    return {};
-}
-
-template<ConfigType CFG>
-Optional<const typename CFG::SectionHeaderType*> getSectionHeader(const typename CFG::HeaderType* header) {
-    if (header && header->e_shnum) {
-        const auto base = reinterpret_cast<uaddr>(header);
-        return reinterpret_cast<CFG::SectionHeaderType*>(base + header->e_shoff);
-    }
-
-    return {};
-}
-
-template <ConfigType CFG>
-Expected<Segments<CFG>> getSegments(const typename CFG::HeaderType* header, typename CFG::WordType type) {
-    Segments<CFG> vec;
-    DASHLE_TRY_OPTIONAL_CONST(ph, getProgramHeader<CFG>(header), Error::NoSegments);
-
-    for (auto i = 0u; i < header->e_phnum; ++i) {
-        if (ph[i].p_type == type)
-            vec.push_back(&ph[i]);
-    }
-
-    std::sort(vec.begin(), vec.end(), [](const typename CFG::ProgramHeaderType* a, const typename CFG::ProgramHeaderType* b) {
-        return a->p_vaddr < b->p_vaddr;
-    });
-    return vec;
-}
-
-template <ConfigType CFG>
-Expected<uaddr> getSegmentAllocOffset(const typename CFG::ProgramHeaderType* segment) {
-    if (segment->p_align > 1) {
-        if ((segment->p_vaddr % segment->p_align) != (segment->p_offset % segment->p_align))
-            return Unexpected(Error::InvalidSegment);
-
-        return dashle::align(segment->p_vaddr, segment->p_align);
-    }
-
-    return segment->p_vaddr;
-}
-
-template <ConfigType CFG>
-Expected<usize> getSegmentAllocSize(const typename CFG::ProgramHeaderType* segment) {
-   if (segment->p_memsz < segment->p_filesz)
-    return Unexpected(Error::InvalidSegment);
-
-    if (segment->p_align > 1)
-        return dashle::alignOver(segment->p_memsz, segment->p_align);
-
-    return segment->p_memsz;
+    return flags;
 }
 
 /*
-template <ConfigType CFG>
-Expected<Sections<CFG>> getSections(const typename CFG::HeaderType* header, typename CFG::WordType type) {
-    Sections<CFG> vec;
-    DASHLE_TRY_OPTIONAL_CONST(sh, getSectionHeader<CFG>(header), Error::NoSections);
 
-    for (auto i = 0u; i < header->e_shnum; ++i) {
-        if (sh[i].sh_type == type)
-            vec.push_back(&sh[i]);
-    }
-
-    return vec;
-}
-*/
-
-template <ConfigType CFG>
-Expected<DynEntries<CFG>> getDynEntries(const typename CFG::HeaderType* header, typename CFG::SwordType tag) {
-    DynEntries<CFG> vec;
-    const auto base = reinterpret_cast<uaddr>(header);
-    DASHLE_TRY_EXPECTED_CONST(dynSegs, getSegments<CFG>(header, PT_DYNAMIC));
-    
-    for (const auto dyn : dynSegs) {
-        auto entry = reinterpret_cast<typename CFG::DynType*>(base + dyn->p_offset);
-        while (entry->d_tag != DT_NULL) {
-            if (entry->d_tag == tag)
-                vec.push_back(entry);
-
-            ++entry;
-        }
-    }
-
-    return vec;
-}
-
-template <ConfigType CFG>
-Expected<const typename CFG::DynType*> getDynEntry(const typename CFG::HeaderType* header, typename CFG::SwordType tag) {
-    DASHLE_TRY_EXPECTED_CONST(dynEntries, getDynEntries<CFG>(header, tag));
-    if (dynEntries.size() != 1)
-        return Unexpected(Error::InvalidSize);
-
-    return dynEntries[0];
-};
 
 template <ConfigType CFG>
 Expected<const typename CFG::SymType*> getSymTab(const typename CFG::HeaderType* header) {
@@ -534,40 +510,7 @@ Expected<std::string> getSymbolName(const typename CFG::HeaderType* header, type
     return Unexpected(Error::InvalidIndex);
 }
 
-struct FuncArrayInfo {
-    usize offset;
-    usize size;
-};
-
-template <ConfigType CFG>
-Optional<FuncArrayInfo> getInitArrayInfo(const typename CFG::HeaderType* header) {
-    const auto initEntry = getDynEntry<CFG>(header, DT_INIT_ARRAY);
-    const auto initEntrySz = getDynEntry<CFG>(header, DT_INIT_ARRAYSZ);
-
-    if (initEntry && initEntrySz) {
-        return FuncArrayInfo {
-            .offset = initEntry.value()->d_un.d_ptr,
-            .size = initEntrySz.value()->d_un.d_val / sizeof(typename CFG::AddrType)
-        };
-    }
-
-    return {};
-}
-
-template <ConfigType CFG>
-Optional<FuncArrayInfo> getFiniArrayInfo(const typename CFG::HeaderType* header) {
-    const auto finiEntry = getDynEntry<CFG>(header, DT_FINI_ARRAY);
-    const auto finiEntrySz = getDynEntry<CFG>(header, DT_FINI_ARRAYSZ);
-
-    if (finiEntry && finiEntrySz) {
-        return FuncArrayInfo {
-            .offset = finiEntry.value()->d_un.d_ptr,
-            .size = finiEntrySz.value()->d_un.d_val / sizeof(typename CFG::AddrType)
-        };
-    }
-
-    return {};
-}
+*/
 
 } // namespace dashle::binary::elf
 
