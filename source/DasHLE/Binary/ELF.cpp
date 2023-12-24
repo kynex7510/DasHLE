@@ -34,6 +34,170 @@ Expected<usize> IProgramHeader::allocationSize() const {
     return segmentMemsz;
 }
 
+constexpr static bool isRelativeReloc(usize type) {
+    return type == R_ARM_RELATIVE || type == R_AARCH64_RELATIVE;
+}
+
+constexpr static bool isSymbolReloc(usize type) {
+    return type == R_ARM_ABS32 || type == R_ARM_GLOB_DAT || type == R_ARM_JUMP_SLOT ||
+        type == R_AARCH64_ABS64 || type == R_AARCH64_GLOB_DAT || type == R_AARCH64_JUMP_SLOT;
+}
+
+Expected<void> ELF::visitRelArray32(const Rel32* relArray, usize size) {
+    for (auto i = 0u; i < size; ++i) {
+        const auto rel = &relArray[i];
+
+        if (isRelativeReloc(rel->type())) {
+            m_Relocs.push_back(RelocInfo {
+                .patchOffset = rel->r_offset,
+                .addend = 0,
+                .kind = RelocKind::Relative,
+            });
+            continue;
+        }
+
+        if (isSymbolReloc(rel->type())) {
+            DASHLE_TRY_EXPECTED_CONST(symbol, symbolByIndex(rel->symbolIndex()));
+            DASHLE_TRY_EXPECTED_CONST(symbolName, stringByOffset(symbol->name()));
+            m_Relocs.push_back(RelocInfo {
+                .patchOffset = rel->r_offset,
+                .addend = 0,
+                .kind = RelocKind::Symbol,
+                .symbolName = symbolName,
+            });
+            continue;
+        }
+
+        return Unexpected(Error::InvalidRelocation);
+    }
+
+    return EXPECTED_VOID;
+}
+
+Expected<void> ELF::visitRelaArray32(const Rela32* relaArray, usize size) {
+    for (auto i = 0u; i < size; ++i) {
+        const auto rela = &relaArray[i];
+
+        if (isRelativeReloc(rela->type())) {
+            m_Relocs.push_back(RelocInfo {
+                .patchOffset = rela->r_offset,
+                .addend = rela->r_addend,
+                .kind = RelocKind::Relative,
+            });
+            continue;
+        }
+
+        if (isSymbolReloc(rela->type())) {
+            DASHLE_TRY_EXPECTED_CONST(symbol, symbolByIndex(rela->symbolIndex()));
+            DASHLE_TRY_EXPECTED_CONST(symbolName, stringByOffset(symbol->name()));
+            m_Relocs.push_back(RelocInfo {
+                .patchOffset = rela->r_offset,
+                .addend = rela->r_addend,
+                .kind = RelocKind::Symbol,
+                .symbolName = symbolName,
+            });
+            continue;
+        }
+
+        return Unexpected(Error::InvalidRelocation);
+    }
+
+    return EXPECTED_VOID;
+}
+
+Expected<void> ELF::visitRel() {
+    const auto relEntryWrapper = dynEntryWithTag(DT_REL);
+    const auto relEntrySizeWrapper = dynEntryWithTag(DT_RELSZ);
+    const auto relEntryEntWrapper = dynEntryWithTag(DT_RELENT);
+
+    if (!relEntryWrapper || !relEntrySizeWrapper || !relEntryEntWrapper)
+        return EXPECTED_VOID;
+
+    DASHLE_ASSERT_WRAPPER_CONST(relEntry, relEntryWrapper);
+    DASHLE_ASSERT_WRAPPER_CONST(relEntrySize, relEntrySizeWrapper);
+    DASHLE_ASSERT_WRAPPER_CONST(relEntryEnt, relEntryEntWrapper);
+
+    const usize size = relEntrySize->val() / relEntryEnt->val();
+
+    if (is64Bits()) {
+        const auto relArray = reinterpret_cast<const Rel64*>(binaryBase() + relEntry->ptr());
+        return visitRelArray64(relArray, size);
+    }
+
+    const auto relArray = reinterpret_cast<const Rel32*>(binaryBase() + relEntry->ptr());
+    return visitRelArray32(relArray, size);
+}
+
+Expected<void> ELF::visitRela() {
+    const auto relaEntryWrapper = dynEntryWithTag(DT_RELA);
+    const auto relaEntrySizeWrapper = dynEntryWithTag(DT_RELASZ);
+    const auto relaEntryEntWrapper = dynEntryWithTag(DT_RELAENT);
+
+    if (!relaEntryWrapper || !relaEntrySizeWrapper || !relaEntryEntWrapper)
+        return EXPECTED_VOID;
+
+    DASHLE_ASSERT_WRAPPER_CONST(relaEntry, relaEntryWrapper);
+    DASHLE_ASSERT_WRAPPER_CONST(relaEntrySize, relaEntrySizeWrapper);
+    DASHLE_ASSERT_WRAPPER_CONST(relaEntryEnt, relaEntryEntWrapper);
+
+    const usize size = relaEntrySize->val() / relaEntryEnt->val();
+
+    if (is64Bits()) {
+        const auto relaArray = reinterpret_cast<const Rela64*>(binaryBase() + relaEntry->ptr());
+        return visitRelaArray64(relaArray, size);
+    }
+
+    const auto relaArray = reinterpret_cast<const Rela32*>(binaryBase() + relaEntry->ptr());
+    return visitRelaArray32(relaArray, size);
+}
+
+Expected<void> ELF::visitJmprel() {
+    const auto jmprelEntryWrapper = dynEntryWithTag(DT_JMPREL);
+    const auto jmprelEntrySizeWrapper = dynEntryWithTag(DT_PLTRELSZ);
+    const auto jmprelEntryTypeWrapper = dynEntryWithTag(DT_PLTREL);
+
+    if (!jmprelEntryWrapper || !jmprelEntrySizeWrapper || !jmprelEntryTypeWrapper)
+        return EXPECTED_VOID;
+
+    DASHLE_ASSERT_WRAPPER_CONST(jmprelEntry, jmprelEntryWrapper);
+    DASHLE_ASSERT_WRAPPER_CONST(jmprelEntrySize, jmprelEntrySizeWrapper);
+    DASHLE_ASSERT_WRAPPER_CONST(jmprelEntryType, jmprelEntryTypeWrapper);
+
+    if (jmprelEntryType->val() == DT_REL) {
+        if (is64Bits()) {
+            const auto relArray = reinterpret_cast<const Rel64*>(binaryBase() + jmprelEntry->ptr());
+            const usize size = jmprelEntrySize->val() / sizeof(Rel64);
+            return visitRelArray64(relArray, size);
+        }
+        
+        const auto relArray = reinterpret_cast<const Rel32*>(binaryBase() + jmprelEntry->ptr());
+        const usize size = jmprelEntrySize->val() / sizeof(Rel32);
+        return visitRelArray32(relArray, size);
+    }
+
+    if (jmprelEntryType->val() == DT_RELA) {
+        if (is64Bits()) {
+            const auto relaArray = reinterpret_cast<const Rela64*>(binaryBase() + jmprelEntry->ptr());
+            const usize size = jmprelEntrySize->val() / sizeof(Rela64);
+            return visitRelaArray64(relaArray, size);
+        }
+
+        const auto relaArray = reinterpret_cast<const Rela32*>(binaryBase() + jmprelEntry->ptr());
+        const usize size = jmprelEntrySize->val() / sizeof(Rela32);
+        return visitRelaArray32(relaArray, size);
+    }
+
+    return Unexpected(Error::InvalidRelocation);
+}
+
+Expected<void> ELF::visitRelocs() {
+    return visitRel().and_then([this] {
+        return visitRela();
+    }).and_then([this] {
+        return visitJmprel();
+    });
+}
+
 Expected<void> ELF::parse(std::vector<u8>&& buffer) {
     m_Buffer = std::move(buffer);
 
@@ -83,6 +247,9 @@ Expected<void> ELF::parse(std::vector<u8>&& buffer) {
             return Unexpected(Error::InvalidArch);
     }
 
+    // Detect binary version.
+    // TODO
+
     // Get section headers.
     if (bits64) {
         const auto entries = reinterpret_cast<const Shdr64*>(binaryBase() + m_Header->shoff());
@@ -105,9 +272,22 @@ Expected<void> ELF::parse(std::vector<u8>&& buffer) {
             m_ProgramHeaders.emplace_back().initialize<ProgramHeader32>(&entries[i]);
     }
 
+    // Get string table.
+    const auto strTabWrapper = dynEntryWithTag(DT_STRTAB);
+    if (strTabWrapper) {
+        DASHLE_ASSERT_WRAPPER_CONST(strTab, strTabWrapper);
+        m_StrTab = strTab;
+    }
 
-    // Detect binary version.
-    // TODO
+    // Get symbol table.
+    const auto symTabWrapper = dynEntryWithTag(DT_SYMTAB);
+    if (symTabWrapper) {
+        DASHLE_ASSERT_WRAPPER_CONST(symTab, symTabWrapper);
+        m_SymTab = symTab;
+    }
+
+    // Get relocations.
+    DASHLE_TRY_EXPECTED_VOID(visitRelocs());
 }
 
 Expected<ELF::SectionHeader> ELF::sectionHeader(usize index) const {
@@ -179,6 +359,29 @@ Expected<ELF::DynEntry> ELF::dynEntryWithTag(Sword tag) const {
         return Unexpected(Error::InvalidSize);
 
     return entries[0];
+}
+
+Expected<ELF::SymEntry> ELF::symbolByIndex(usize index) const {
+    if (index == STN_UNDEF)
+        return Unexpected(Error::InvalidIndex);
+
+    DASHLE_TRY_OPTIONAL_CONST(symTab, m_SymTab, Error::NotFound);
+    SymEntry symbol;
+
+    if (is64Bits()) {
+        const auto entries = reinterpret_cast<const Sym64*>(binaryBase() + symTab->ptr());
+        symbol.initialize<SymEntry64>(&entries[index]);
+    } else {
+        const auto entries = reinterpret_cast<const Sym32*>(binaryBase() + symTab->ptr());
+        symbol.initialize<SymEntry32>(&entries[index]);
+    }
+
+    return symbol;
+}
+
+Expected<std::string> ELF::stringByOffset(usize offset) const {
+    DASHLE_TRY_OPTIONAL_CONST(strTab, m_StrTab, Error::NotFound);
+    return reinterpret_cast<const char*>(binaryBase() + strTab->ptr() + offset);
 }
 
 Optional<FuncArrayInfo> ELF::initArrayInfo() const {

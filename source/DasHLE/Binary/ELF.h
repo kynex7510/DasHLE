@@ -225,7 +225,7 @@ concept RelConstraint = requires(T a) {
     { a.symbolIndex() } -> std::convertible_to<usize>;
 };
 
-struct Elf32_Rel {
+struct Rel32 {
     Addr32 r_offset;
     Word r_info;
 
@@ -233,29 +233,29 @@ struct Elf32_Rel {
     Word symbolIndex() const { return r_info >> 8; }
 };
 
-static_assert(sizeof(Elf32_Rel) == 0x08 && RelConstraint<Elf32_Rel>);
+static_assert(sizeof(Rel32) == 0x08 && RelConstraint<Rel32>);
 
-struct Elf32_Rela : Elf32_Rel {
+struct Rela32 : Rel32 {
     Sword r_addend;
 };
 
-static_assert(sizeof(Elf32_Rela) == 0x0C);
+static_assert(sizeof(Rela32) == 0x0C);
 
-struct Elf64_Rel {
+struct Rel64 {
     Addr64 r_offset;
-    Xword	r_info;
+    Xword r_info;
 
     Xword type() const { return r_info & 0xFFFFFFFF; }
     Xword symbolIndex() const { return r_info >> 32; }
 };
 
-static_assert(sizeof(Elf64_Rel) == 0x10 && RelConstraint<Elf64_Rel>);
+static_assert(sizeof(Rel64) == 0x10 && RelConstraint<Rel64>);
 
-struct Elf64_Rela : Elf64_Rel {
+struct Rela64 : Rel64 {
     Sxword r_addend;
 };
 
-static_assert(sizeof(Elf64_Rela) == 0x18);
+static_assert(sizeof(Rela64) == 0x18);
 
 /* Wrappers */
 
@@ -309,6 +309,15 @@ struct IDynEntry {
     virtual Addr64 ptr() const = 0;
 };
 
+struct ISymEntry {
+    virtual Word name() const = 0;
+    virtual Addr64 value() const = 0;
+    virtual Xword size() const = 0;
+    virtual u8 info() const = 0;
+    virtual u8 other() const = 0;
+    virtual Section shndx() const = 0;
+};
+
 namespace _internal {
 
 template <typename T>
@@ -348,8 +357,8 @@ class SectionHeaderImpl final : public ISectionHeader {
     Xword size() const override { return m_Ptr->sh_size; }
     Word link() const override { return m_Ptr->sh_link; }
     Word info() const override { return m_Ptr->sh_info; }
-    Xword addralign() const override { m_Ptr->sh_addralign; }
-    Xword entsize() const override { m_Ptr->sh_entsize; }
+    Xword addralign() const override { return m_Ptr->sh_addralign; }
+    Xword entsize() const override { return m_Ptr->sh_entsize; }
 
 public:
     SectionHeaderImpl(const T* ptr) : m_Ptr(ptr) { DASHLE_ASSERT(m_Ptr); }
@@ -360,14 +369,14 @@ requires (OneOf<T, Phdr32, Phdr64>)
 class ProgramHeaderImpl final : public IProgramHeader {
     const T* m_Ptr = nullptr;
 
-    Word type() const override { m_Ptr->p_type; }
-    Word flags() const override { m_Ptr->p_flags; }
-    Off64 offset() const override { m_Ptr->p_offset; }
-    Addr64 vaddr() const override { m_Ptr->p_vaddr; }
-    Addr64 paddr() const override { m_Ptr->p_paddr; }
-    Xword filesz() const override { m_Ptr->p_filesz; }
-    Xword memsz() const override { m_Ptr->p_memsz; }
-    Xword align() const override { m_Ptr->p_align; }
+    Word type() const override { return m_Ptr->p_type; }
+    Word flags() const override { return m_Ptr->p_flags; }
+    Off64 offset() const override { return m_Ptr->p_offset; }
+    Addr64 vaddr() const override { return m_Ptr->p_vaddr; }
+    Addr64 paddr() const override { return m_Ptr->p_paddr; }
+    Xword filesz() const override { return m_Ptr->p_filesz; }
+    Xword memsz() const override { return m_Ptr->p_memsz; }
+    Xword align() const override { return m_Ptr->p_align; }
 
 public:
     ProgramHeaderImpl(const T* ptr) : m_Ptr(ptr) { DASHLE_ASSERT(m_Ptr); }
@@ -378,12 +387,28 @@ requires (OneOf<T, Dyn32, Dyn64>)
 class DynEntryImpl : public IDynEntry {
     const T* m_Ptr = nullptr;
 
-    Sxword tag() const override { m_Ptr->d_tag; }
-    Xword val() const override { m_Ptr->d_un.d_val; }
-    Addr64 ptr() const override { m_Ptr->d_un.d_ptr; }
+    Sxword tag() const override { return m_Ptr->d_tag; }
+    Xword val() const override { return m_Ptr->d_un.d_val; }
+    Addr64 ptr() const override { return m_Ptr->d_un.d_ptr; }
 
 public:
     DynEntryImpl(const T* ptr) : m_Ptr(ptr) { DASHLE_ASSERT(m_Ptr); }
+};
+
+template <typename T>
+requires (OneOf<T, Sym32, Sym64>)
+struct SymEntryImpl : public ISymEntry {
+    const T* m_Ptr = nullptr;
+
+    virtual Word name() const override { return m_Ptr->st_name; }
+    virtual Addr64 value() const override { return m_Ptr->st_value; }
+    virtual Xword size() const override { return m_Ptr->st_size; }
+    virtual u8 info() const override { return m_Ptr->st_info; }
+    virtual u8 other() const override { return m_Ptr->st_other; }
+    virtual Section shndx() const override { return m_Ptr->st_shndx; }
+
+public:
+    SymEntryImpl(const T* ptr) : m_Ptr(ptr) { DASHLE_ASSERT(m_Ptr); }
 };
 
 } // namespace dashle::binary::elf::_internal
@@ -400,6 +425,7 @@ enum class RelocKind {
 };
 
 struct RelocInfo {
+    // TODO: Do these have to be signed?
     soff patchOffset;
     soff addend;
     RelocKind kind;
@@ -420,12 +446,15 @@ class ELF final {
     using ProgramHeader64 = _internal::ProgramHeaderImpl<Phdr64>;
     using DynEntry32 = _internal::DynEntryImpl<Dyn32>;
     using DynEntry64 = _internal::DynEntryImpl<Dyn64>;
+    using SymEntry32 = _internal::SymEntryImpl<Sym32>;
+    using SymEntry64 = _internal::SymEntryImpl<Sym64>;
 
 public:
     using Header = PolymorphicView<IHeader, Header32, Header64>;
     using SectionHeader = PolymorphicView<ISectionHeader, SectionHeader32, SectionHeader64>;
     using ProgramHeader = PolymorphicView<IProgramHeader, ProgramHeader32, ProgramHeader64>;
     using DynEntry = PolymorphicView<IDynEntry, DynEntry32, DynEntry64>;
+    using SymEntry = PolymorphicView<ISymEntry, SymEntry32, SymEntry64>;
 
 private:
     std::vector<u8> m_Buffer;
@@ -433,13 +462,36 @@ private:
     Header m_Header;
     std::vector<SectionHeader> m_SectionHeaders;
     std::vector<ProgramHeader> m_ProgramHeaders;
+    Optional<DynEntry> m_StrTab;
+    // TODO: We should load all symbols.
+    Optional<DynEntry> m_SymTab;
+    std::vector<RelocInfo> m_Relocs;
 
     const auto binaryBase() const { return m_Buffer.data(); }
+
+    // TODO: These can be size optimized with a PolymorphicArrayView.
+    Expected<void> visitRelArray32(const Rel32* relArray, usize size);
+
+    Expected<void> visitRelArray64(const Rel64* relArray, usize size) {
+        return Unexpected(Error::InvalidRelocation);
+    }
+
+    Expected<void> visitRelaArray32(const Rela32* relaArray, usize size);
+
+    Expected<void> visitRelaArray64(const Rela64* relaArray, usize size) {
+        return Unexpected(Error::InvalidRelocation);
+    }
+
+    Expected<void> visitRel();
+    Expected<void> visitRela();
+    Expected<void> visitJmprel();
+    Expected<void> visitRelocs();
 
 public:
     Expected<void> parse(std::vector<u8>&& buffer);
     Version version() const { return m_Version; }
     bool is64Bits() const { return version() == Version::Arm64_v8a; }
+    const std::span<const RelocInfo> relocs() const { return m_Relocs; }
 
     Header header() const { return m_Header; }
 
@@ -453,6 +505,9 @@ public:
 
     Expected<std::vector<DynEntry>> dynEntriesWithTag(Sword tag) const;
     Expected<DynEntry> dynEntryWithTag(Sword tag) const;
+
+    Expected<SymEntry> symbolByIndex(usize index) const;
+    Expected<std::string> stringByOffset(usize offset) const;
 
     Optional<FuncArrayInfo> initArrayInfo() const;
     Optional<FuncArrayInfo> finiArrayInfo() const;

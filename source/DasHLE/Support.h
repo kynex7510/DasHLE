@@ -112,9 +112,6 @@ class PolymorphicView final {
     const Base* m_Ptr = nullptr;
 
     void copyFrom(const PolymorphicView& rhs) {
-        if (m_Ptr)
-            m_Ptr->~Base();
-
         if (rhs.m_Ptr) {
             std::copy(rhs.m_Storage.buffer, rhs.m_Storage.buffer + sizeof(m_Storage.buffer), m_Storage.buffer);
             m_Ptr = reinterpret_cast<const Base*>(m_Storage.buffer);
@@ -127,16 +124,6 @@ public:
     PolymorphicView() {}
     PolymorphicView(const PolymorphicView& rhs) { copyFrom(rhs); }
 
-    PolymorphicView(PolymorphicView&& rhs) {
-        copyFrom(rhs);
-        rhs.m_Ptr = nullptr;
-    }
-
-    ~PolymorphicView() {
-        if (m_Ptr)
-            m_Ptr->~Base();
-    }
-
     template <typename T, typename ... Args>
     requires(OneOf<T, Derived...>)
     void initialize(Args&&... args) {
@@ -144,7 +131,7 @@ public:
         m_Ptr = reinterpret_cast<const Base*>(m_Storage.buffer);
     }
 
-    const Base* get() { return m_Ptr; }
+    const Base* get() const { return m_Ptr; }
 
     const Base* operator->() const {
         DASHLE_ASSERT(m_Ptr);

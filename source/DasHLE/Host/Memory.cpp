@@ -1,3 +1,4 @@
+#include "DasHLE/Support.h"
 #include "DasHLE/Host/Memory.h"
 
 #include <set>
