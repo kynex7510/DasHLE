@@ -1,15 +1,8 @@
-#include "DasHLE/Binary/Binary.h"
 #include "DasHLE/Guest/ARM.h"
 
 using namespace dashle;
 using namespace dashle::guest;
 using namespace dashle::guest::arm;
-
-struct ELFConfig : binary::elf::Config32, binary::elf::ConfigLE {
-    constexpr static auto ARCH = binary::elf::constants::EM_ARM;
-};
-
-using Binary = binary::Binary<ELFConfig>;
 
 constexpr static u32 cpsrThumbEnable(u32 cpsr) { return cpsr | 0x30u; }
 constexpr static u32 cpsrThumbDisable(u32 cpsr) { return cpsr & ~(0x30u); }

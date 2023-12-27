@@ -9,32 +9,28 @@
 namespace dashle::host::interop {
 
 // TODO: make this structure generic.
-class IREmitterWrapper {
+class IREmitter {
     dynarmic32::IREmitter* m_Ptr;
 
 public:
-    IREmitterWrapper(dynarmic32::IREmitter* ptr) : m_Ptr(ptr) {}
+    IREmitter(dynarmic32::IREmitter* ptr) : m_Ptr(ptr) {}
     dynarmic32::IREmitter* operator->() { return m_Ptr; };
 };
 
-using EmitterCallback = void(*)(IREmitterWrapper);
+using Emitter = void(*)(IREmitter);
 
 class InteropHandler final {
     std::shared_ptr<host::memory::MemoryManager> m_Mem;
     const usize m_MaxEntries;
     uaddr m_TableBase = 0;
-    std::unordered_map<uaddr, EmitterCallback> m_Emitters;
+    std::unordered_map<uaddr, Emitter> m_Emitters;
 
 public:
     InteropHandler(std::shared_ptr<host::memory::MemoryManager> mem, usize maxEntries);
     ~InteropHandler();
     
-    Expected<uaddr> registerEmitterCallback(EmitterCallback cb);
-    Expected<void> invokeEmitterCallback(uaddr vaddr, IREmitterWrapper emitter);
-};
-
-struct SymResolver {
-    virtual Expected<uaddr> resolve(const std::string& sym) const = 0;
+    Expected<uaddr> registerEmitter(EmitterCallback cb);
+    Expected<void> invokeEmitter(uaddr vaddr, IREmitterWrapper emitter);
 };
 
 } // namespace dashle::host::interop

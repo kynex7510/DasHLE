@@ -14,9 +14,9 @@ set(Boost_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/external/boost")
 set(Boost_NO_SYSTEM_PATHS ON)
 
 add_subdirectory(external/dynarmic)
-
 include_directories(external/dynarmic/src)
-# HACK
+
+# Required for using the IR emitter
 include_directories(external/dynarmic/externals/mcl/include)
 include_directories(external/dynarmic/externals/fmt/include)
 include_directories(external/boost)
@@ -26,12 +26,14 @@ include_directories(external/boost)
 include_directories(source)
 
 set(DasHLE_SOURCES
-    ${CMAKE_SOURCE_DIR}/source/DasHLE/Base.cpp
-    ${CMAKE_SOURCE_DIR}/source/DasHLE/Host/Memory.cpp
-    ${CMAKE_SOURCE_DIR}/source/DasHLE/Host/Interop.cpp
-    ${CMAKE_SOURCE_DIR}/source/DasHLE/Guest/ARM.cpp
-    ${CMAKE_SOURCE_DIR}/source/DasHLE/Guest/VM.cpp
-    ${CMAKE_SOURCE_DIR}/source/DasHLE/Host/Linux/Base.cpp
+    ${CMAKE_SOURCE_DIR}/source/DasHLE/Host/Linux/*.cpp
+)
+
+set(DasHLE_SOURCES
+    ${DasHLE_SOURCES}
+    ${CMAKE_SOURCE_DIR}/source/DasHLE/*.cpp
+    ${CMAKE_SOURCE_DIR}/source/DasHLE/Host/*.cpp
+    ${CMAKE_SOURCE_DIR}/source/DasHLE/Guest/*.cpp
 )
 
 #add_subdirectory(tests)

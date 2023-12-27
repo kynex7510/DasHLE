@@ -543,30 +543,6 @@ constexpr Word unwrapPermissionFlags(usize perm) {
     return flags;
 }
 
-/*
-
-
-template <ConfigType CFG>
-Expected<const typename CFG::SymType*> getSymTab(const typename CFG::HeaderType* header) {
-    DASHLE_TRY_EXPECTED_CONST(dynEntry, getDynEntry<CFG>(header, DT_SYMTAB));
-    const auto base = reinterpret_cast<uaddr>(header);
-    return reinterpret_cast<typename CFG::SymType*>(base + dynEntry->d_un.d_ptr);
-}
-
-template <ConfigType CFG>
-Expected<std::string> getSymbolName(const typename CFG::HeaderType* header, typename CFG::WordType index) {
-    if (index != STN_UNDEF) {
-        DASHLE_TRY_EXPECTED_CONST(symtab, getSymTab<CFG>(header));
-        DASHLE_TRY_EXPECTED_CONST(strtab, getDynEntry<CFG>(header, DT_STRTAB));
-        const auto base = reinterpret_cast<uaddr>(header);
-        return reinterpret_cast<const char*>(base + strtab->d_un.d_ptr + symtab[index].st_name);
-    }
-
-    return Unexpected(Error::InvalidIndex);
-}
-
-*/
-
 } // namespace dashle::binary::elf
 
 #endif /* _DASHLE_BINARY_ELF_H */

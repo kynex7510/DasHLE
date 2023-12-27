@@ -1,7 +1,6 @@
 #ifndef _DASHLE_GUEST_ARM_H
 #define _DASHLE_GUEST_ARM_H
 
-#include "DasHLE/Binary/Binary.h"
 #include "DasHLE/Host/Interop.h"
 #include "DasHLE/Guest/VM.h"
 
@@ -42,28 +41,20 @@ constexpr static usize FPSCR = R15 + 2;
 
 } // namespace dashle::guest::arm::regs
 
-class VMImpl final : public GuestVM {
+class VM final : public StackVM {
     class Environment;
 
     const host::interop::SymResolver* m_SymResolver;
     std::unique_ptr<Environment> m_Env;
     std::unique_ptr<dynarmic::ExclusiveMonitor> m_ExMon;
     std::unique_ptr<dynarmic32::Jit> m_Jit;
-    uaddr m_StackBase = 0;
-    uaddr m_StackTop = 0;
-    std::vector<uaddr> m_Initializers;
-    std::vector<uaddr> m_Finalizers;
 
     void setupJit(binary::Version version);
     void setPC(uaddr addr);
 
 public:
-    VMImpl(std::shared_ptr<host::memory::MemoryManager> mem, std::shared_ptr<host::interop::InteropHandler> interop,
-        const host::interop::SymResolver* resolver);
-
-    ~VMImpl();
-
-    Expected<void> loadBinary(const std::span<const u8> buffer) override;
+    VM(std::shared_ptr<host::memory::MemoryManager> mem, std::shared_ptr<host::interop::InteropHandler> interop);
+    ~VM();
 
     Expected<uaddr> virtualToHost(uaddr vaddr) const override;
 

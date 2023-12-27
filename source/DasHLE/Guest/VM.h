@@ -10,7 +10,10 @@ namespace dashle::guest {
 
 constexpr static auto EXEC_SUCCESS = static_cast<dynarmic::HaltReason>(0u);
 
-struct GuestVM {
+class StackVM {
+    const uaddr m_StackBase;
+    const uaddr m_StackTop;
+
     virtual ~GuestVM() {}
 
     virtual Expected<void> loadBinary(const std::span<const u8> buffer) = 0;
