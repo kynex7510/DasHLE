@@ -19,7 +19,7 @@
 #ifndef _DASHLE_BINARY_JNIDEFS_H
 #define _DASHLE_BINARY_JNIDEFS_H
 
-#include "DasHLE/Base.h"
+#include "DasHLE/Support/Types.h"
 
 namespace dashle::binary::jni {
 
@@ -337,17 +337,15 @@ constexpr static jint VERSION_1_6 = 0x00010006;
 
 constexpr static jint OK = 0;         
 constexpr static jint ERR = -1;
-
-// E* is used for errno.
-constexpr static jint EDETACHED_ = -2;       
-constexpr static jint EVERSION_ = -3;    
-constexpr static jint ENOMEM_ = -4;        
-constexpr static jint EEXIST_ = -5;        
-constexpr static jint EINVAL_ = -6; 
+constexpr static jint DETACHED = -2;       
+constexpr static jint VERSION = -3;    
+constexpr static jint NOMEM = -4;        
+constexpr static jint EXIST = -5;        
+constexpr static jint INVAL = -6; 
 
 constexpr static jint COMMIT = 1;           
 constexpr static jint ABORT = 2; 
 
 } // namespace dashle::binary::jni        
 
-#endif /* _H */
+#endif /* _DASHLE_BINARY_JNIDEFS_H */

@@ -1,14 +1,14 @@
-#include "DasHLE/Host/Import.h"
+#include "DasHLE/Host/Bridge.h"
 
 using namespace dashle;
-using namespace dashle::host::import;
+using namespace dashle::host::bridge;
 
-// To the JIT an IFT entry is just a location to some instruction.
+// To the Jit an IFT entry is just a location to some instruction.
 constexpr static usize ENTRY_SIZE = 4u;
 
-// ImportHandler
+// Bridge
 
-Expected<void> ImportHandler::registerFunctionImpl(const std::string& symbol, Emitter emitter) {
+Expected<void> Bridge::registerFunctionImpl(const std::string& symbol, Emitter emitter) {
     if (hasBuiltIFT())
         return Unexpected(Error::InvalidOperation);
 
@@ -23,7 +23,7 @@ Expected<void> ImportHandler::registerFunctionImpl(const std::string& symbol, Em
 
 template <typename IR>
 requires (OneOf<IR, dynarmic32::IREmitter*, dynarmic64::IREmitter*>)
-Expected<void> ImportHandler::invokeEmitterImpl(uaddr vaddr, IR ir) {
+Expected<void> Bridge::invokeEmitterImpl(uaddr vaddr, IR ir) {
     if (!hasBuiltIAT())
         return Unexpected(Error::InvalidOperation);
 
@@ -35,14 +35,14 @@ Expected<void> ImportHandler::invokeEmitterImpl(uaddr vaddr, IR ir) {
     return Unexpected(Error::NotFound);
 }
 
-ImportHandler::ImportHandler(std::shared_ptr<host::memory::MemoryManager> mem, usize bitness)
+Bridge::Bridge(std::shared_ptr<host::memory::MemoryManager> mem, usize bitness)
     : m_Mem(mem), m_Bitness(bitness) {
-    DASHLE_ASSERT(m_Bitness == BITS_32 || m_Bitness == BITS_64);
+    DASHLE_ASSERT(m_Bitness == dashle::BITS_32 || m_Bitness == dashle::BITS_64);
 }
 
-ImportHandler::~ImportHandler() { DASHLE_ASSERT(m_Mem->free(m_IFTBase)); }
+Bridge::~Bridge() { DASHLE_ASSERT(m_Mem->free(m_IFTBase)); }
 
-Expected<void> ImportHandler::registerVariable(const std::string& symbol, uaddr vaddr) {
+Expected<void> Bridge::registerVariable(const std::string& symbol, uaddr vaddr) {
     if (hasBuiltIFT())
         return Unexpected(Error::InvalidOperation);
 
@@ -56,9 +56,9 @@ Expected<void> ImportHandler::registerVariable(const std::string& symbol, uaddr 
     return EXPECTED_VOID;
 }
 
-Expected<void> ImportHandler::buildIFT() {
+Expected<void> Bridge::buildIFT() {
     // Allocate IFT: this a table of reserved addresses which act as pseudo addresses for imported functions.
-    // You can imagine as if the whole function is contained within its entry address, the JIT will jump to the
+    // You can imagine as if the whole function is contained within its entry address, the Jit will jump to the
     // correct function when executing from one of the entries. 
     DASHLE_TRY_EXPECTED_CONST(block, m_Mem->allocate({
         .size = m_FuncEntries.size() * ENTRY_SIZE,
@@ -87,7 +87,7 @@ Expected<void> ImportHandler::buildIFT() {
     return EXPECTED_VOID;
 }
 
-Expected<uaddr> ImportHandler::addressForSymbol(const std::string& symbol) {
+Expected<uaddr> Bridge::addressForSymbol(const std::string& symbol) {
     if (!hasBuiltIFT())
         return Unexpected(Error::InvalidOperation);
 
@@ -100,10 +100,10 @@ Expected<uaddr> ImportHandler::addressForSymbol(const std::string& symbol) {
     return Unexpected(Error::NotFound);
 }
 
-Expected<void> ImportHandler::invokeEmitter(uaddr vaddr, dynarmic32::IREmitter* ir) {
+Expected<void> Bridge::emitCall(uaddr vaddr, dynarmic32::IREmitter* ir) {
     invokeEmitterImpl(vaddr, ir);
 }
 
-Expected<void> ImportHandler::invokeEmitter(uaddr vaddr, dynarmic64::IREmitter* ir) {
+Expected<void> Bridge::emitCall(uaddr vaddr, dynarmic64::IREmitter* ir) {
     invokeEmitterImpl(vaddr, ir);
 }

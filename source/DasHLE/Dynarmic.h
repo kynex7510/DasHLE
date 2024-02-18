@@ -21,4 +21,9 @@ namespace dynarmic_ir = Dynarmic::IR;
 
 } // namespace dashle
 
+// TODO: this is only here for linting and should be removed once dynarmic64 gets support for code hooks.
+namespace Dynarmic::A64 {
+    class IREmitter;
+} // namespace Dynarmic::A64
+
 #endif /* _DASHLE_DYNARMIC_H */
