@@ -1,5 +1,5 @@
-#include "DasHLE/Support.h"
 #include "DasHLE/Host/Memory.h"
+#include "DasHLE/Support/Math.h"
 
 #include <set>
 #include <algorithm>
@@ -155,7 +155,7 @@ Expected<const AllocatedBlock*> MemoryManager::blockFromVAddr(uaddr vaddr) const
 }
 
 static Expected<uaddr> alignedBase(uaddr base, usize alignment) {
-    DASHLE_TRY_EXPECTED_CONST(alignedDown, dashle::align(base, alignment));
+    DASHLE_TRY_EXPECTED_CONST(alignedDown, dashle::alignDown(base, alignment));
 
     // If the address is aligned we don't have to do anything.
     if (alignedDown != base) {
@@ -215,7 +215,7 @@ Expected<const AllocatedBlock*> MemoryManager::allocate(const AllocArgs& args) {
 
     // If we have alignment then size must be aligned too.
     if (alignment) {
-        DASHLE_ASSERT_WRAPPER_CONST(alignedSize, dashle::align(args.size, alignment));
+        DASHLE_ASSERT_WRAPPER_CONST(alignedSize, dashle::alignDown(args.size, alignment));
         if (alignedSize != args.size)
             return Unexpected(Error::InvalidSize);
     }
@@ -223,7 +223,7 @@ Expected<const AllocatedBlock*> MemoryManager::allocate(const AllocArgs& args) {
     // If we have an enforced hint and alignment, make sure the hint is aligned.
     if (args.hint && alignment && (args.flags & flags::FORCE_HINT)) {
         DASHLE_ASSERT_WRAPPER_CONST(hint, args.hint);
-        DASHLE_ASSERT_WRAPPER_CONST(alignedAddr, dashle::align(hint, alignment));
+        DASHLE_ASSERT_WRAPPER_CONST(alignedAddr, dashle::alignDown(hint, alignment));
         if (hint != alignedAddr)
             return Unexpected(Error::InvalidAddress);
 
@@ -254,7 +254,7 @@ Expected<const AllocatedBlock*> MemoryManager::allocate(const AllocArgs& args) {
             // Alignment checks also check for available space.
             if (alignment) {
                 // Attempt to align down.
-                DASHLE_ASSERT_WRAPPER_CONST(alignedDownAddr, dashle::align(hint, alignment));
+                DASHLE_ASSERT_WRAPPER_CONST(alignedDownAddr, dashle::alignDown(hint, alignment));
                 if (alignedDownAddr < it->virtualBase) {
                     // Attempt to align up.
                     DASHLE_ASSERT_WRAPPER_CONST(alignedUpAddr, dashle::alignOver(hint, alignment));

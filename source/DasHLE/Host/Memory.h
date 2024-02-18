@@ -1,7 +1,7 @@
 #ifndef _DASHLE_HOST_MEMORY_H
 #define _DASHLE_HOST_MEMORY_H
 
-#include "DasHLE/Base.h"
+#include "DasHLE/Support/Types.h"
 
 #include <memory>
 
