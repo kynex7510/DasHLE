@@ -25,16 +25,22 @@ include_directories(external/boost)
 
 include_directories(source)
 
-set(DasHLE_SOURCES
-    ${CMAKE_SOURCE_DIR}/source/DasHLE/Host/Linux/*.cpp
-)
+FILE(GLOB DasHLE_SOURCES "${CMAKE_SOURCE_DIR}/source/DasHLE/Host/Linux/*.cpp")
 
-set(DasHLE_SOURCES
-    ${DasHLE_SOURCES}
-    ${CMAKE_SOURCE_DIR}/source/DasHLE/*.cpp
-    ${CMAKE_SOURCE_DIR}/source/DasHLE/Host/*.cpp
-    ${CMAKE_SOURCE_DIR}/source/DasHLE/Guest/*.cpp
-)
+FILE(GLOB DasHLE_SOURCES "${CMAKE_SOURCE_DIR}/source/DasHLE/*.cpp")
+FILE(GLOB DasHLE_SOURCES "${CMAKE_SOURCE_DIR}/source/DasHLE/Host/*.cpp")
+FILE(GLOB DasHLE_SOURCES "${CMAKE_SOURCE_DIR}/source/DasHLE/Guest/*.cpp")
+
+#set(DasHLE_SOURCES
+#    ${CMAKE_SOURCE_DIR}/source/DasHLE/Host/Linux/*.cpp
+#)
+
+#set(DasHLE_SOURCES
+#    ${DasHLE_SOURCES}
+#    ${CMAKE_SOURCE_DIR}/source/DasHLE/*.cpp
+#    ${CMAKE_SOURCE_DIR}/source/DasHLE/Host/*.cpp
+#    ${CMAKE_SOURCE_DIR}/source/DasHLE/Guest/*.cpp
+#)
 
 #add_subdirectory(tests)
 

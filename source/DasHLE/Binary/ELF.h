@@ -1,7 +1,6 @@
 #ifndef _DASHLE_BINARY_ELF_H
 #define _DASHLE_BINARY_ELF_H
 
-#include "DasHLE/Support.h"
 #include "DasHLE/Host/Memory.h"
 
 #include <span>
@@ -426,8 +425,8 @@ enum class RelocKind {
 
 struct RelocInfo {
     // TODO: Do these have to be signed?
-    soff patchOffset;
-    soff addend;
+    usize patchOffset;
+    usize addend;
     RelocKind kind;
     Optional<std::string> symbolName;
 };
@@ -450,11 +449,11 @@ class ELF final {
     using SymEntry64 = _internal::SymEntryImpl<Sym64>;
 
 public:
-    using Header = PolymorphicView<IHeader, Header32, Header64>;
-    using SectionHeader = PolymorphicView<ISectionHeader, SectionHeader32, SectionHeader64>;
-    using ProgramHeader = PolymorphicView<IProgramHeader, ProgramHeader32, ProgramHeader64>;
-    using DynEntry = PolymorphicView<IDynEntry, DynEntry32, DynEntry64>;
-    using SymEntry = PolymorphicView<ISymEntry, SymEntry32, SymEntry64>;
+    using Header = Poly<IHeader, Header32, Header64>;
+    using SectionHeader = Poly<ISectionHeader, SectionHeader32, SectionHeader64>;
+    using ProgramHeader = Poly<IProgramHeader, ProgramHeader32, ProgramHeader64>;
+    using DynEntry = Poly<IDynEntry, DynEntry32, DynEntry64>;
+    using SymEntry = Poly<ISymEntry, SymEntry32, SymEntry64>;
 
 private:
     std::vector<u8> m_Buffer;

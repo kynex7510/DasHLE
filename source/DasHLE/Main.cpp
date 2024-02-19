@@ -1,5 +1,3 @@
-#define DASHLE_HAS_DYNARMIC_IR
-
 #include "DasHLE/Guest/VM.h"
 #include "DasHLE/Guest/ARM.h"
 
