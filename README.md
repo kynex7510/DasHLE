@@ -18,3 +18,8 @@ cd build
 cmake -DCMAKE_BUILD_TYPE=Debug -DDASHLE_TARGET=Linux ..
 make -j16
 ```
+
+## Dependencies
+
+- [dynarmic](https://github.com/merryhime/dynarmic)
+- [efl::Poly](https://github.com/8ightfold/poly-standalone)

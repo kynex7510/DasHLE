@@ -4,6 +4,9 @@
 
 ### Std
 
+_ctype_
+_tolower_tab_
+_toupper_tab_
 malloc
 btowc
 wcrtomb
@@ -78,6 +81,8 @@ vfprintf
 vprintf
 vsnprintf
 vsprintf
+raise
+realloc
 
 ### Math
 
@@ -119,9 +124,16 @@ sqrtf
 
 __stack_chk_guard
 __stack_chk_fail
+__cxa_atexit
+__cxa_finalize
 
 `extern unsigned long __stack_chk_guard;`
+
 `void __stack_chk_fail(void);`
+
+`int __cxa_atexit(void (*func) (void *), void * arg, void * dso_handle);`
+
+`void __cxa_finalize(void * d);`
 
 ## Linux
 
@@ -253,6 +265,16 @@ gzopen
 gzread
 uncompress
 
+`uLong crc32(uLong crc, const Bytef * buf, uInt len);`
+
+`int deflate(z_streamp stream, int flush);`
+
+`int deflateEnd(z_streamp stream);`
+
+`int deflateInit2_ (z_streamp strm, int level, int method, int windowBits, int memLevel, int strategy, char * version, int stream_size);`
+
+`int deflateInit_(z_streamp stream, int level, const char * version, int stream_size);`
+
 ## OpenGL
 
 glActiveTexture
@@ -373,19 +395,24 @@ _ZN4FMOD6System9setOutputE15FMOD_OUTPUTTYPE
 _ZN4FMOD7Channel11getPositionEPjj
 _ZN4FMOD7Channel11setPositionEjj
 
+`FMOD::ChannelControl::setCallback(FMOD_RESULT (*)(FMOD_CHANNELCONTROL*, FMOD_CHANNELCONTROL_TYPE, FMOD_CHANNELCONTROL_CALLBACK_TYPE, void*, void*))`
+
+`FMOD::ChannelControl::stop()`
+
+`FMOD::System::createSound(char const*, unsigned int, FMOD_CREATESOUNDEXINFO*, FMOD::Sound**)`
+
+`FMOD::System::playSound(FMOD::Sound*, FMOD::ChannelGroup*, bool, FMOD::Channel**)`
+
+`FMOD::System::createStream(char const*, unsigned int, FMOD_CREATESOUNDEXINFO*, FMOD::Sound**)`
+
 ## Misc
 
 __android_log_print
 __assert2
-__cxa_atexit
-__cxa_finalize
 __errno
 __fpclassifyd
 __gnu_Unwind_Find_exidx
 __sF
-_ctype_
-_tolower_tab_
-_toupper_tab_
 access
 alarm
 basename
@@ -428,10 +455,8 @@ pause
 perror
 pipe
 poll
-raise
 read
 readdir
-realloc
 remove
 rename
 setgid
