@@ -1,6 +1,0 @@
-[submodule "external/dynarmic"]
-	path = external/dynarmic
-	url = https://github.com/merryhime/dynarmic
-[submodule "external/boost"]
-	path = external/boost
-	url = https://github.com/citra-emu/ext-boost
