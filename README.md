@@ -7,7 +7,7 @@
 ### Setup
 
 ```
-git clone --recurse-submodules -j$(nproc) https://github.com/kynex7510/DasHLE
+git clone -j$(nproc) https://github.com/kynex7510/DasHLE
 ```
 
 ### Compilation
@@ -15,8 +15,8 @@ git clone --recurse-submodules -j$(nproc) https://github.com/kynex7510/DasHLE
 ```
 mkdir build
 cd build
-cmake -DCMAKE_BUILD_TYPE=Debug -DDASHLE_TARGET=Linux ..
-make -j16
+cmake -DCMAKE_BUILD_TYPE=Debug ..
+make -j$(nproc)
 ```
 
 ## Dependencies

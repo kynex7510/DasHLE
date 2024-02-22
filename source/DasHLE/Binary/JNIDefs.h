@@ -327,24 +327,24 @@ struct JNIInvokeInterface {
     jint (*AttachCurrentThreadAsDaemon)(JavaVM*, JNIEnv**, void*);
 };
 
-constexpr static jboolean FALSE = 0;
-constexpr static jboolean TRUE = 1;
+constexpr static jboolean JNI_FALSE = 0;
+constexpr static jboolean JNI_TRUE = 1;
 
-constexpr static jint VERSION_1_1 = 0x00010001;
-constexpr static jint VERSION_1_2 = 0x00010002;
-constexpr static jint VERSION_1_4 = 0x00010004;
-constexpr static jint VERSION_1_6 = 0x00010006;
+constexpr static jint JNI_VERSION_1_1 = 0x00010001;
+constexpr static jint JNI_VERSION_1_2 = 0x00010002;
+constexpr static jint JNI_VERSION_1_4 = 0x00010004;
+constexpr static jint JNI_VERSION_1_6 = 0x00010006;
 
-constexpr static jint OK = 0;         
-constexpr static jint ERR = -1;
-constexpr static jint DETACHED = -2;       
-constexpr static jint VERSION = -3;    
-constexpr static jint NOMEM = -4;        
-constexpr static jint EXIST = -5;        
-constexpr static jint INVAL = -6; 
+constexpr static jint JNI_OK = 0;         
+constexpr static jint JNI_ERR = -1;
+constexpr static jint JNI_EDETACHED = -2;       
+constexpr static jint JNI_EVERSION = -3;    
+constexpr static jint JNI_ENOMEM = -4;        
+constexpr static jint JNI_EEXIST = -5;        
+constexpr static jint JNI_EINVAL = -6; 
 
-constexpr static jint COMMIT = 1;           
-constexpr static jint ABORT = 2; 
+constexpr static jint JNI_COMMIT = 1;           
+constexpr static jint JNI_ABORT = 2; 
 
 } // namespace dashle::binary::jni        
 
