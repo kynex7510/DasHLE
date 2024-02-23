@@ -159,7 +159,7 @@ static Expected<uaddr> alignedBase(uaddr base, usize alignment) {
 
     // If the address is aligned we don't have to do anything.
     if (alignedDown != base) {
-        DASHLE_ASSERT_WRAPPER_CONST(alignedUp, dashle::alignOver(base, alignment));
+        DASHLE_ASSERT_WRAPPER_CONST(alignedUp, dashle::alignUp(base, alignment));
         return alignedUp;
     }
 
@@ -257,7 +257,7 @@ Expected<const AllocatedBlock*> MemoryManager::allocate(const AllocArgs& args) {
                 DASHLE_ASSERT_WRAPPER_CONST(alignedDownAddr, dashle::alignDown(hint, alignment));
                 if (alignedDownAddr < it->virtualBase) {
                     // Attempt to align up.
-                    DASHLE_ASSERT_WRAPPER_CONST(alignedUpAddr, dashle::alignOver(hint, alignment));
+                    DASHLE_ASSERT_WRAPPER_CONST(alignedUpAddr, dashle::alignUp(hint, alignment));
                     if (alignedUpAddr > (it->virtualBase + it->size)) {
                         it = freeBlocks.end();
                     } else {
