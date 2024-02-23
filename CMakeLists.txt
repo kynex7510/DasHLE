@@ -33,8 +33,8 @@ endif()
 file(GLOB DasHLE_SOURCES 
     "${CMAKE_SOURCE_DIR}/source/DasHLE/Error.cpp" # TODO: pick any.
     "${CMAKE_SOURCE_DIR}/source/DasHLE/Binary/*.cpp"
-#    "${CMAKE_SOURCE_DIR}/source/DasHLE/Host/*.cpp"
-#    "${CMAKE_SOURCE_DIR}/source/DasHLE/Guest/*.cpp"
+    "${CMAKE_SOURCE_DIR}/source/DasHLE/Host/*.cpp"
+    "${CMAKE_SOURCE_DIR}/source/DasHLE/Guest/*.cpp"
 )
 
 # Tests
@@ -42,7 +42,16 @@ if (DASHLE_TESTS)
     add_subdirectory(tests)
 endif()
 
-# Build
+# Make project
 add_executable(DasHLE ${DasHLE_PLATFORM_SOURCES} ${DasHLE_SOURCES})
+
+if ("ELF32" IN_LIST DASHLE_TARGETS)
+    target_compile_definitions(DasHLE PUBLIC DASHLE_HAS_TARGET_ELF32)
+endif()
+
+if ("ELF64" IN_LIST DASHLE_TARGETS)
+    target_compile_definitions(DasHLE PUBLIC DASHLE_HAS_TARGET_ELF64)
+endif()
+
 add_dependencies(DasHLE dynarmic poly::standalone)
 target_link_libraries(DasHLE dynarmic poly::standalone)

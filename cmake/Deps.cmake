@@ -34,10 +34,12 @@ CPMAddPackage(
     URL_HASH SHA256=c6942a60bf8650fed23b8c6a946919808372e9f024de9eddb7dc329582883714
 )
 
-# Required for using the IR emitter
-#include_directories(external/dynarmic/externals/mcl/include)
-#include_directories(external/dynarmic/externals/fmt/include)
-#include_directories(external/boost)
+if (Dynarmic_ADDED)
+    # Required for using the IR emitter.
+    include_directories("${Dynarmic_SOURCE_DIR}/externals/mcl/include")
+    include_directories("${Dynarmic_SOURCE_DIR}/externals/fmt/include")
+    include_directories("${Boost_SOURCE_DIR}")
+endif()
 
 # Poly
 

@@ -113,6 +113,12 @@ using Optional = std::optional<T>;
 template <typename Base, typename ... Deriveds>
 using Poly = efl::Poly<Base, Deriveds...>; 
 
+#if defined(NDEBUG)
+constexpr static auto DEBUG_MODE = false;
+#else
+constexpr static auto DEBUG_MODE = true;
+#endif // NDEBUG
+
 constexpr static auto BITS_32 = 0b01;
 constexpr static auto BITS_64 = 0b10;
 constexpr static auto BITS_ANY = BITS_32 | BITS_64;

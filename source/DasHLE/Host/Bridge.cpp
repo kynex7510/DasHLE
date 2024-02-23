@@ -24,7 +24,7 @@ Expected<void> Bridge::registerFunctionImpl(const std::string& symbol, Emitter e
 template <typename IR>
 requires (OneOf<IR, dynarmic32::IREmitter*, dynarmic64::IREmitter*>)
 Expected<void> Bridge::invokeEmitterImpl(uaddr vaddr, IR ir) {
-    if (!hasBuiltIAT())
+    if (!hasBuiltIFT())
         return Unexpected(Error::InvalidOperation);
 
     if (auto it = m_Emitters.find(vaddr); it != m_Emitters.end()) {
@@ -101,9 +101,9 @@ Expected<uaddr> Bridge::addressForSymbol(const std::string& symbol) {
 }
 
 Expected<void> Bridge::emitCall(uaddr vaddr, dynarmic32::IREmitter* ir) {
-    invokeEmitterImpl(vaddr, ir);
+    return invokeEmitterImpl(vaddr, ir);
 }
 
 Expected<void> Bridge::emitCall(uaddr vaddr, dynarmic64::IREmitter* ir) {
-    invokeEmitterImpl(vaddr, ir);
+    return invokeEmitterImpl(vaddr, ir);
 }

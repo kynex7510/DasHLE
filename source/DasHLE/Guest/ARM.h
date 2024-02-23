@@ -1,18 +1,14 @@
 #ifndef _DASHLE_GUEST_ARM_H
 #define _DASHLE_GUEST_ARM_H
 
-#include "DasHLE/Host/Interop.h"
-#include "DasHLE/Guest/VM.h"
+#include "DasHLE/Support/Math.h"
+#include "DasHLE/Host/Memory.h"
+#include "DasHLE/Host/Bridge.h"
+#include "DasHLE/Guest/StackVM.h"
 
 #include <unordered_map>
 
 namespace dashle::guest::arm {
-
-constexpr static usize PAGE_SIZE = 0x1000; // 4KB
-static_assert(dashle::isPowerOfTwo(PAGE_SIZE));
-
-constexpr static usize STACK_SIZE = 1024 * 1024; // 1MB
-static_assert(dashle::align<usize>(STACK_SIZE, PAGE_SIZE) == STACK_SIZE);
 
 namespace regs {
 
@@ -41,26 +37,24 @@ constexpr static usize FPSCR = R15 + 2;
 
 } // namespace dashle::guest::arm::regs
 
-class VM final : public StackVM {
+class ARMVM final : public StackVM {
     class Environment;
 
-    const host::interop::SymResolver* m_SymResolver;
     std::unique_ptr<Environment> m_Env;
     std::unique_ptr<dynarmic::ExclusiveMonitor> m_ExMon;
     std::unique_ptr<dynarmic32::Jit> m_Jit;
 
-    void setupJit(binary::Version version);
     void setPC(uaddr addr);
 
 public:
-    VM(std::shared_ptr<host::memory::MemoryManager> mem, std::shared_ptr<host::interop::InteropHandler> interop);
-    ~VM();
+    ARMVM(std::shared_ptr<host::memory::MemoryManager> mem, std::shared_ptr<host::bridge::Bridge> bridge);
+    ARMVM(ARMVM&&) = default;
 
-    Expected<uaddr> virtualToHost(uaddr vaddr) const override;
+    ARMVM& operator=(ARMVM&&) = default;
 
+    void setupJit(dynarmic32::ArchVersion version);
     dynarmic::HaltReason execute(Optional<uaddr> addr = {}) override;
     dynarmic::HaltReason step(Optional<uaddr> addr = {}) override;
-    void runInitializers() override;
 
     void clearCache() override {
         DASHLE_ASSERT(m_Jit);

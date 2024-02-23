@@ -17,6 +17,7 @@ class Bridge final {
         std::variant<Emitter32, Emitter64> m_Emitter;
 
     public:
+        Emitter() {}
         Emitter(Emitter32 emitter) : m_Emitter(emitter) {}
         Emitter(Emitter64 emitter) : m_Emitter(emitter) {}
 
@@ -45,7 +46,7 @@ class Bridge final {
     void emitCall32(dynarmic32::IREmitter* ir) {
         // TODO
         // ir->CallHostFunctionWithGuestABI(FN);
-        ir->BXWritePC(ir->GetRegister(dynarmic32::Reg(regs::LR)));
+        ir->BXWritePC(ir->GetRegister(dynarmic32::Reg::LR));
         ir->SetTerm(dynarmic_ir::Term::ReturnToDispatch{});
     }
 
