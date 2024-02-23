@@ -21,7 +21,7 @@ constexpr Expected<T> alignDown(T val, T alignment) {
 }
 
 template <std::integral T>
-constexpr Expected<T> alignOver(T val, T alignment) {
+constexpr Expected<T> alignUp(T val, T alignment) {
     if (dashle::isPowerOfTwo(alignment))
         return (val + (alignment - 1)) & ~(alignment - 1);
 

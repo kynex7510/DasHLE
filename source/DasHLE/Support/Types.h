@@ -1,6 +1,8 @@
 #ifndef _DASHLE_SUPPORT_TYPES_H
 #define _DASHLE_SUPPORT_TYPES_H
 
+#include "Poly/Poly.hpp"
+
 #include "DasHLE/Support/Diagnostics.h"
 
 #include <cstdint>
@@ -108,53 +110,14 @@ using Unexpected = std::unexpected<Error>;
 template <typename T>
 using Optional = std::optional<T>;
 
+template <typename Base, typename ... Deriveds>
+using Poly = efl::Poly<Base, Deriveds...>; 
+
 constexpr static auto BITS_32 = 0b01;
 constexpr static auto BITS_64 = 0b10;
 constexpr static auto BITS_ANY = BITS_32 | BITS_64;
 
 constexpr static auto EXPECTED_VOID = Expected<void>();
-
-template <typename Base, typename ... Deriveds>
-requires (AreDerived<Base, Deriveds...>)
-class Poly final {
-    using StorageType = std::variant<std::monostate, Deriveds...>;
-    StorageType m_Storage;
-
-    static consteval usize numOfVariants() {
-        return std::variant_size_v<StorageType> - 1;
-    }
-
-    const Base* getPtr() const {
-        DASHLE_ASSERT(m_Storage.index() != 0u);
-        const auto ptr = (reinterpret_cast<uaddr>(std::get_if<Deriveds>(m_Storage)) | ...);
-        return reinterpret_cast<const Base*>(ptr);
-    }
-
-public:
-    Poly() {}
-    Poly(const Poly& rhs) = default;
-    Poly(Poly&& rhs) = default;
-
-    template <typename T>
-    requires (OneOf<T, Deriveds...>)
-    bool holdsType() const { return std::holds_alternative<T>(m_Storage); }
-    bool holdsAny() const { return !std::holds_alternative<std::monostate>(m_Storage); }
-
-    Poly& operator=(Poly& rhs) = default;
-
-    template <typename T>
-    requires (OneOf<T, Deriveds...> && Copyable<T>)
-    Poly& operator=(const T& obj) { m_Storage = obj; }
-
-    template <typename T>
-    requires (OneOf<T, Deriveds...> && Movable<T>)
-    Poly& operator=(T&& obj) { m_Storage = std::move(obj); }
-
-    Base* operator->() {
-        DASHLE_ASSERT(holdsAny());
-        return const_cast<Base*>(getPtr());
-    }
-};
 
 std::string errorAsString(Error error);
 

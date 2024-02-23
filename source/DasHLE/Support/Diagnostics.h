@@ -16,7 +16,7 @@
 
 #else
 
-#define DASHLE_LOG_LINE(...) ::dashle::_internal::logLine(DASHLE_FORMAT(__VA_ARGS__))
+#define DASHLE_LOG_LINE(...) ::dashle::_impl::logLine(DASHLE_FORMAT(__VA_ARGS__))
 
 #define DASHLE_ASSERT(cond)                                 \
     do {                                                    \
@@ -36,8 +36,8 @@
 
 #endif // NDEBUG
 
-namespace dashle::_internal {
+namespace dashle::_impl {
 void logLine(const std::string& s);
-} // namespace dashle::_internal
+} // namespace dashle::_impl
 
 #endif /* _DASHLE_SUPPORT_DIAGNOSTICS_H */

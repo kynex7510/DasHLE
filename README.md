@@ -15,7 +15,7 @@ git clone -j$(nproc) https://github.com/kynex7510/DasHLE
 ```
 mkdir build
 cd build
-cmake -DCMAKE_BUILD_TYPE=Debug ..
+cmake -DCMAKE_BUILD_TYPE=Debug -DDASHLE_PLATFORM=Linux -DDASHLE_TARGETS=ELF32 ..
 make -j$(nproc)
 ```
 

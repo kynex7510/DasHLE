@@ -6,30 +6,43 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED on)
 set(CMAKE_CXX_EXTENSIONS off)
 
-include(cmake/Deps.cmake)
-
 project(DasHLE)
 
-#add_subdirectory(external/dynarmic)
-#include_directories(external/dynarmic/src)
+option(DASHLE_TESTS "Build tests (disabled by default)" off)
 
-# Required for using the IR emitter
-#include_directories(external/dynarmic/externals/mcl/include)
-#include_directories(external/dynarmic/externals/fmt/include)
-#include_directories(external/boost)
+if (NOT DEFINED DASHLE_PLATFORM)
+    # TODO: detect host.
+    message(FATAL_ERROR "Target platform not set.")
+endif()
 
-include_directories(source)
+if (NOT DEFINED DASHLE_TARGETS)
+    message(WARNING "No target defined, all targets support enabled")
+    set(DASHLE_TARGETS "ELF32;ELF64" CACHE STRING "Select binaries to support")
+endif()
 
-#FILE(GLOB DasHLE_SOURCES "${CMAKE_SOURCE_DIR}/source/DasHLE/Host/Linux/*.cpp")
+# Dependencies
+include(cmake/Deps.cmake)
+include_directories("${CMAKE_SOURCE_DIR}/source")
 
-#FILE(GLOB DasHLE_SOURCES "${CMAKE_SOURCE_DIR}/source/DasHLE/*.cpp")
-FILE(GLOB DasHLE_SOURCES "${CMAKE_SOURCE_DIR}/source/DasHLE/Binary/*.cpp")
-#FILE(GLOB DasHLE_SOURCES "${CMAKE_SOURCE_DIR}/source/DasHLE/Host/*.cpp")
-#FILE(GLOB DasHLE_SOURCES "${CMAKE_SOURCE_DIR}/source/DasHLE/Guest/*.cpp")
+# Linux
+if (DASHLE_PLATFORM STREQUAL "Linux")
+    file(GLOB DasHLE_PLATFORM_SOURCES "${CMAKE_SOURCE_DIR}/source/DasHLE/Host/Linux/*.cpp")
+endif()
 
-#add_subdirectory(tests)
+# Common
+file(GLOB DasHLE_SOURCES 
+    "${CMAKE_SOURCE_DIR}/source/DasHLE/Error.cpp" # TODO: pick any.
+    "${CMAKE_SOURCE_DIR}/source/DasHLE/Binary/*.cpp"
+#    "${CMAKE_SOURCE_DIR}/source/DasHLE/Host/*.cpp"
+#    "${CMAKE_SOURCE_DIR}/source/DasHLE/Guest/*.cpp"
+)
 
-add_executable(DasHLE ${DasHLE_SOURCES})
-#${CMAKE_SOURCE_DIR}/source/DasHLE/Main.cpp)
+# Tests
+if (DASHLE_TESTS)
+    add_subdirectory(tests)
+endif()
+
+# Build
+add_executable(DasHLE ${DasHLE_PLATFORM_SOURCES} ${DasHLE_SOURCES})
 add_dependencies(DasHLE dynarmic poly::standalone)
 target_link_libraries(DasHLE dynarmic poly::standalone)

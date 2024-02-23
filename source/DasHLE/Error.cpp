@@ -1,6 +1,4 @@
-#include "DasHLE/Base.h"
-
-// Base
+#include "DasHLE/Support/Types.h"
 
 std::string dashle::errorAsString(Error error) {
 #define ERROR_CASE(e) \
@@ -27,6 +25,8 @@ std::string dashle::errorAsString(Error error) {
         ERROR_CASE(NoHostMemory);
         ERROR_CASE(NotFound);
         ERROR_CASE(InvalidArgument);
+        ERROR_CASE(Duplicate);
+        ERROR_CASE(InvalidOperation);
     }
 
 #undef ERROR_CASE

@@ -1,6 +1,6 @@
 include(cmake/CPM.cmake)
 
-# Boost
+# Boost is a required dependency for dynarmic.
 
 CPMAddPackage(
     NAME Boost
@@ -17,7 +17,15 @@ if (Boost_ADDED)
     set(Boost_INCLUDE_DIR ${Boost_SOURCE_DIR})
 endif()
 
-# Dynarmic
+# Add dynarmic.
+
+if ("ELF32" IN_LIST DASHLE_TARGETS)
+    list(APPEND DYNARMIC_FRONTENDS "A32")
+endif()
+
+if ("ELF64" IN_LIST DASHLE_TARGETS)
+    list(APPEND DYNARMIC_FRONTENDS "A64")
+endif()
 
 CPMAddPackage(
     NAME Dynarmic
@@ -26,11 +34,16 @@ CPMAddPackage(
     URL_HASH SHA256=c6942a60bf8650fed23b8c6a946919808372e9f024de9eddb7dc329582883714
 )
 
+# Required for using the IR emitter
+#include_directories(external/dynarmic/externals/mcl/include)
+#include_directories(external/dynarmic/externals/fmt/include)
+#include_directories(external/boost)
+
 # Poly
 
 CPMAddPackage(
     NAME Poly
     VERSION 1.0.0
-    URL "https://github.com/8ightfold/poly-standalone/archive/14fbe4c390d685b972e1f1a09c54d4f6ec216e65.tar.gz"
-    URL_HASH SHA256=4dccbe5ea767c808f7dd6101190b34396d949fa8322855edcfefb1737677f4c9
+    URL "https://github.com/8ightfold/poly-standalone/archive/026ae3f01d834ae1a9726556e93cdf7c510868fa.tar.gz"
+    URL_HASH SHA256=4b213fa2f63a33be67aa1c55df2ae9e2d542d650785e29dc42d3984db981280c
 )

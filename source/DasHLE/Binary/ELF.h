@@ -259,7 +259,7 @@ static_assert(sizeof(Rela64) == 0x18);
 /* Wrappers */
 
 struct IHeader {
-    virtual u8* ident() const = 0;
+    virtual const u8* ident() const = 0;
     virtual Half type() const = 0;
     virtual Half machine() const = 0;
     virtual Word version() const = 0;
@@ -317,14 +317,14 @@ struct ISymEntry {
     virtual Section shndx() const = 0;
 };
 
-namespace _internal {
+namespace _impl {
 
 template <typename T>
 requires (OneOf<T, Ehdr32, Ehdr64>)
 class HeaderImpl final : public IHeader {
     const T* m_Ptr = nullptr;
 
-    u8* ident() const override { return m_Ptr->e_ident; }
+    const u8* ident() const override { return m_Ptr->e_ident; }
     Half type() const override { return m_Ptr->e_type; }
     Half machine() const override { return m_Ptr->e_machine; }
     Word version() const override { return m_Ptr->e_version; }
@@ -410,7 +410,7 @@ public:
     SymEntryImpl(const T* ptr) : m_Ptr(ptr) { DASHLE_ASSERT(m_Ptr); }
 };
 
-} // namespace dashle::binary::elf::_internal
+} // namespace dashle::binary::elf::_impl
 
 enum class Version {
     Armeabi,     // v5TE
@@ -424,9 +424,8 @@ enum class RelocKind {
 };
 
 struct RelocInfo {
-    // TODO: Do these have to be signed?
     usize patchOffset;
-    usize addend;
+    s64 addend;
     RelocKind kind;
     Optional<std::string> symbolName;
 };
@@ -437,16 +436,16 @@ struct FuncArrayInfo {
 };
 
 class ELF final {
-    using Header32 = _internal::HeaderImpl<Ehdr32>;
-    using Header64 = _internal::HeaderImpl<Ehdr64>;
-    using SectionHeader32 = _internal::SectionHeaderImpl<Shdr32>;
-    using SectionHeader64 = _internal::SectionHeaderImpl<Shdr64>;
-    using ProgramHeader32 = _internal::ProgramHeaderImpl<Phdr32>;
-    using ProgramHeader64 = _internal::ProgramHeaderImpl<Phdr64>;
-    using DynEntry32 = _internal::DynEntryImpl<Dyn32>;
-    using DynEntry64 = _internal::DynEntryImpl<Dyn64>;
-    using SymEntry32 = _internal::SymEntryImpl<Sym32>;
-    using SymEntry64 = _internal::SymEntryImpl<Sym64>;
+    using Header32 = _impl::HeaderImpl<Ehdr32>;
+    using Header64 = _impl::HeaderImpl<Ehdr64>;
+    using SectionHeader32 = _impl::SectionHeaderImpl<Shdr32>;
+    using SectionHeader64 = _impl::SectionHeaderImpl<Shdr64>;
+    using ProgramHeader32 = _impl::ProgramHeaderImpl<Phdr32>;
+    using ProgramHeader64 = _impl::ProgramHeaderImpl<Phdr64>;
+    using DynEntry32 = _impl::DynEntryImpl<Dyn32>;
+    using DynEntry64 = _impl::DynEntryImpl<Dyn64>;
+    using SymEntry32 = _impl::SymEntryImpl<Sym32>;
+    using SymEntry64 = _impl::SymEntryImpl<Sym64>;
 
 public:
     using Header = Poly<IHeader, Header32, Header64>;
@@ -461,9 +460,9 @@ private:
     Header m_Header;
     std::vector<SectionHeader> m_SectionHeaders;
     std::vector<ProgramHeader> m_ProgramHeaders;
-    Optional<DynEntry> m_StrTab;
+    DynEntry m_StrTab;
     // TODO: We should load all symbols.
-    Optional<DynEntry> m_SymTab;
+    DynEntry m_SymTab;
     std::vector<RelocInfo> m_Relocs;
 
     const auto binaryBase() const { return m_Buffer.data(); }

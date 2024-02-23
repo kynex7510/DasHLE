@@ -1,3 +1,4 @@
+#include "DasHLE/Support/Math.h"
 #include "DasHLE/Binary/ELF.h"
 
 using namespace dashle;
@@ -14,7 +15,7 @@ Expected<uaddr> IProgramHeader::allocationOffset() const {
         if ((segmentVaddr % segmentAlign) != (segmentOffset % segmentAlign))
             return Unexpected(Error::InvalidSegment);
 
-        return dashle::align(segmentVaddr, segmentAlign);
+        return dashle::alignDown(segmentVaddr, segmentAlign);
     }
 
     return segmentVaddr;
@@ -29,7 +30,7 @@ Expected<usize> IProgramHeader::allocationSize() const {
     return Unexpected(Error::InvalidSegment);
 
     if (segmentAlign > 1)
-        return dashle::alignOver(segmentMemsz, segmentAlign);
+        return dashle::alignUp(segmentMemsz, segmentAlign);
 
     return segmentMemsz;
 }
@@ -209,9 +210,9 @@ Expected<void> ELF::parse(std::vector<u8>&& buffer) {
 
     // Set header.
     if (bits64) {
-        m_Header.initialize<Header32>(reinterpret_cast<const Ehdr32*>(binaryBase()));
+        m_Header = Header32(reinterpret_cast<const Ehdr32*>(binaryBase()));
     } else {
-        m_Header.initialize<Header64>(reinterpret_cast<const Ehdr64*>(binaryBase()));
+        m_Header = Header64(reinterpret_cast<const Ehdr64*>(binaryBase()));
     }
 
     // Check size.
@@ -254,40 +255,42 @@ Expected<void> ELF::parse(std::vector<u8>&& buffer) {
     if (bits64) {
         const auto entries = reinterpret_cast<const Shdr64*>(binaryBase() + m_Header->shoff());
         for (auto i = 0u; i < m_Header->shnum(); ++i)
-            m_SectionHeaders.emplace_back().initialize<SectionHeader64>(&entries[i]);
+            m_SectionHeaders.emplace_back(SectionHeader64(&entries[i]));
     } else {
         const auto entries = reinterpret_cast<const Shdr32*>(binaryBase() + m_Header->shoff());
         for (auto i = 0u; i < m_Header->shnum(); ++i)
-            m_SectionHeaders.emplace_back().initialize<SectionHeader32>(&entries[i]);
+            m_SectionHeaders.emplace_back(SectionHeader32(&entries[i]));
     }
 
     // Get program headers.
      if (bits64) {
         const auto entries = reinterpret_cast<const Phdr64*>(binaryBase() + m_Header->phoff());
         for (auto i = 0u; i < m_Header->phnum(); ++i)
-            m_ProgramHeaders.emplace_back().initialize<ProgramHeader64>(&entries[i]);
+            m_ProgramHeaders.emplace_back(ProgramHeader64(&entries[i]));
     } else {
         const auto entries = reinterpret_cast<const Phdr32*>(binaryBase() + m_Header->phoff());
         for (auto i = 0u; i < m_Header->phnum(); ++i)
-            m_ProgramHeaders.emplace_back().initialize<ProgramHeader32>(&entries[i]);
+            m_ProgramHeaders.emplace_back(ProgramHeader32(&entries[i]));
     }
 
     // Get string table.
-    const auto strTabWrapper = dynEntryWithTag(DT_STRTAB);
-    if (strTabWrapper) {
-        DASHLE_ASSERT_WRAPPER_CONST(strTab, strTabWrapper);
-        m_StrTab = strTab;
-    }
+    DASHLE_TRY_EXPECTED_VOID(
+        dynEntryWithTag(DT_STRTAB).and_then([this](const DynEntry& strTab) {
+            this->m_StrTab = Poly(strTab);
+            return EXPECTED_VOID;
+        }
+    ));
 
     // Get symbol table.
-    const auto symTabWrapper = dynEntryWithTag(DT_SYMTAB);
-    if (symTabWrapper) {
-        DASHLE_ASSERT_WRAPPER_CONST(symTab, symTabWrapper);
-        m_SymTab = symTab;
-    }
+    DASHLE_TRY_EXPECTED_VOID(
+        dynEntryWithTag(DT_SYMTAB).and_then([this](const DynEntry& symTab) {
+            this->m_SymTab = Poly(symTab);
+            return EXPECTED_VOID;
+        }
+    ));
 
     // Get relocations.
-    DASHLE_TRY_EXPECTED_VOID(visitRelocs());
+    return visitRelocs();
 }
 
 Expected<ELF::SectionHeader> ELF::sectionHeader(usize index) const {
@@ -335,7 +338,7 @@ Expected<std::vector<ELF::DynEntry>> ELF::dynEntriesWithTag(Sword tag) const {
             auto entry = reinterpret_cast<const Dyn64*>(binaryBase() + dyn->offset());
             while (entry->d_tag != DT_NULL) {
                 if (entry->d_tag == tag)
-                    entries.emplace_back().initialize<DynEntry64>(entry);
+                    entries.emplace_back(DynEntry64(entry));
 
                 ++entry;
             }
@@ -343,7 +346,7 @@ Expected<std::vector<ELF::DynEntry>> ELF::dynEntriesWithTag(Sword tag) const {
             auto entry = reinterpret_cast<const Dyn32*>(binaryBase() + dyn->offset());
             while (entry->d_tag != DT_NULL) {
                 if (entry->d_tag == tag)
-                    entries.emplace_back().initialize<DynEntry32>(entry);
+                    entries.emplace_back(DynEntry32(entry));
 
                 ++entry;
             }
@@ -365,23 +368,25 @@ Expected<ELF::SymEntry> ELF::symbolByIndex(usize index) const {
     if (index == STN_UNDEF)
         return Unexpected(Error::InvalidIndex);
 
-    DASHLE_TRY_OPTIONAL_CONST(symTab, m_SymTab, Error::NotFound);
-    SymEntry symbol;
+    if (!m_SymTab.holdsAny())
+        return Unexpected(Error::NotFound);
 
+    SymEntry symbol;
     if (is64Bits()) {
-        const auto entries = reinterpret_cast<const Sym64*>(binaryBase() + symTab->ptr());
-        symbol.initialize<SymEntry64>(&entries[index]);
+        const auto entries = reinterpret_cast<const Sym64*>(binaryBase() + m_SymTab->ptr());
+        symbol = SymEntry64(&entries[index]);
     } else {
-        const auto entries = reinterpret_cast<const Sym32*>(binaryBase() + symTab->ptr());
-        symbol.initialize<SymEntry32>(&entries[index]);
+        const auto entries = reinterpret_cast<const Sym32*>(binaryBase() + m_SymTab->ptr());
+        symbol = SymEntry32(&entries[index]);
     }
 
     return symbol;
 }
 
 Expected<std::string> ELF::stringByOffset(usize offset) const {
-    DASHLE_TRY_OPTIONAL_CONST(strTab, m_StrTab, Error::NotFound);
-    return reinterpret_cast<const char*>(binaryBase() + strTab->ptr() + offset);
+    if (!m_StrTab.holdsAny())
+        return Unexpected(Error::NotFound);
+    return reinterpret_cast<const char*>(binaryBase() + m_StrTab->ptr() + offset);
 }
 
 Optional<FuncArrayInfo> ELF::initArrayInfo() const {
