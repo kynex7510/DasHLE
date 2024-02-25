@@ -1,12 +1,11 @@
 #ifndef _DASHLE_GUEST_ARM_H
 #define _DASHLE_GUEST_ARM_H
 
-#include "DasHLE/Support/Math.h"
+#if defined(DASHLE_HAS_GUEST_ARM)
+
 #include "DasHLE/Host/Memory.h"
 #include "DasHLE/Host/Bridge.h"
 #include "DasHLE/Guest/StackVM.h"
-
-#include <unordered_map>
 
 namespace dashle::guest::arm {
 
@@ -47,12 +46,13 @@ class ARMVM final : public StackVM {
     void setPC(uaddr addr);
 
 public:
-    ARMVM(std::shared_ptr<host::memory::MemoryManager> mem, std::shared_ptr<host::bridge::Bridge> bridge);
+    ARMVM(std::shared_ptr<host::memory::MemoryManager> mem, std::shared_ptr<host::bridge::Bridge> bridge, GuestVersion version);
+    ARMVM(const ARMVM&) = delete;
     ARMVM(ARMVM&&) = default;
 
+    ARMVM& operator=(const ARMVM&) = delete;
     ARMVM& operator=(ARMVM&&) = default;
 
-    void setupJit(dynarmic32::ArchVersion version);
     dynarmic::HaltReason execute(Optional<uaddr> addr = {}) override;
     dynarmic::HaltReason step(Optional<uaddr> addr = {}) override;
 
@@ -73,5 +73,7 @@ public:
 };
 
 } // namespace dashle::guest::arm
+
+#endif // DASHLE_HAS_GUEST_ARM
 
 #endif /* _DASHLE_GUEST_ARM_H */

@@ -2,20 +2,19 @@
 #define _DASHLE_GUEST_STACKVM_H
 
 #include "DasHLE/Dynarmic.h"
-#include "DasHLE/Host/FS.h"
 #include "DasHLE/Host/Memory.h"
+
+#include <type_traits>
 
 namespace dashle::guest {
 
-constexpr static auto EXEC_SUCCESS = static_cast<dynarmic::HaltReason>(0u);
+constexpr static auto VM_EXEC_SUCCESS = static_cast<dynarmic::HaltReason>(0u);
 
 class StackVM {
 protected:
     std::shared_ptr<host::memory::MemoryManager> m_Mem;
     uaddr m_StackBase = 0u;
     uaddr m_StackTop = 0u;
-
-    virtual Expected<uaddr> virtualToHost(uaddr vaddr) const = 0;
 
     StackVM(std::shared_ptr<host::memory::MemoryManager> mem, usize stackSize, usize alignment = 0u);
 

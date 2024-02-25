@@ -412,12 +412,6 @@ public:
 
 } // namespace dashle::binary::elf::_impl
 
-enum class Version {
-    Armeabi,     // v5TE
-    Armeabi_v7a, // v7
-    Arm64_v8a,   // v8
-};
-
 enum class RelocKind {
     Relative,
     Symbol,
@@ -427,7 +421,7 @@ struct RelocInfo {
     usize patchOffset;
     s64 addend;
     RelocKind kind;
-    Optional<std::string> symbolName;
+    Optional<std::string> symbol;
 };
 
 struct FuncArrayInfo {
@@ -456,7 +450,7 @@ public:
 
 private:
     std::vector<u8> m_Buffer;
-    Version m_Version = Version::Armeabi_v7a;
+    GuestVersion m_Version = GuestVersion::Armeabi_v7a;
     Header m_Header;
     std::vector<SectionHeader> m_SectionHeaders;
     std::vector<ProgramHeader> m_ProgramHeaders;
@@ -467,14 +461,12 @@ private:
 
     const auto binaryBase() const { return m_Buffer.data(); }
 
-    // TODO: These can be size optimized with a PolymorphicArrayView.
     Expected<void> visitRelArray32(const Rel32* relArray, usize size);
+     Expected<void> visitRelaArray32(const Rela32* relaArray, usize size);
 
     Expected<void> visitRelArray64(const Rel64* relArray, usize size) {
         return Unexpected(Error::InvalidRelocation);
     }
-
-    Expected<void> visitRelaArray32(const Rela32* relaArray, usize size);
 
     Expected<void> visitRelaArray64(const Rela64* relaArray, usize size) {
         return Unexpected(Error::InvalidRelocation);
@@ -487,8 +479,8 @@ private:
 
 public:
     Expected<void> parse(std::vector<u8>&& buffer);
-    Version version() const { return m_Version; }
-    bool is64Bits() const { return version() == Version::Arm64_v8a; }
+    GuestVersion version() const { return m_Version; }
+    bool is64Bits() const { return version() == GuestVersion::Arm64_v8a; }
     const std::span<const RelocInfo> relocs() const { return m_Relocs; }
 
     Header header() const { return m_Header; }

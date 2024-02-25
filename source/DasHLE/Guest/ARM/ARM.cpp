@@ -1,4 +1,5 @@
-#include "DasHLE/Guest/ARM.h"
+#include "DasHLE/Support/Math.h"
+#include "DasHLE/Guest/ARM/ARM.h"
 
 using namespace dashle;
 using namespace dashle::guest;
@@ -183,24 +184,31 @@ void ARMVM::setPC(uaddr addr) {
     m_Jit->Regs()[regs::PC] = clearThumb(addr);
 }
 
-ARMVM::ARMVM(std::shared_ptr<host::memory::MemoryManager> mem, std::shared_ptr<host::bridge::Bridge> bridge)
+ARMVM::ARMVM(std::shared_ptr<host::memory::MemoryManager> mem, std::shared_ptr<host::bridge::Bridge> bridge, GuestVersion version)
     : StackVM(mem, STACK_SIZE, PAGE_SIZE) {
     m_Env = std::make_unique<ARMVM::Environment>(mem, bridge);
     m_ExMon = std::make_unique<dynarmic::ExclusiveMonitor>(1);
-}
 
-void ARMVM::setupJit(dynarmic32::ArchVersion version) {
     // Build config.
     dynarmic32::UserConfig cfg;
     cfg.callbacks = m_Env.get();
-    cfg.arch_version = version;
+
+    switch (version) {
+        case GuestVersion::Armeabi:
+            cfg.arch_version = dynarmic32::ArchVersion::v5TE;
+            break;
+        case GuestVersion::Armeabi_v7a:
+            cfg.arch_version = dynarmic32::ArchVersion::v7;
+            break;
+        default:
+            DASHLE_UNREACHABLE("Invalid guest version!");
+    }
 
     if constexpr(dashle::DEBUG_MODE)
         cfg.optimizations = dynarmic::no_optimizations;
     else
         cfg.optimizations = dynarmic::all_safe_optimizations;
 
-    m_ExMon->Clear();
     cfg.global_monitor = m_ExMon.get();
 
     // Create jit.
@@ -219,8 +227,8 @@ dynarmic::HaltReason ARMVM::execute(Optional<uaddr> wrappedAddr) {
     m_Jit->Regs()[regs::LR] = stopAddr;
     setPC(addr);
 
-    auto reason = EXEC_SUCCESS;
-    while (reason == EXEC_SUCCESS) {
+    auto reason = VM_EXEC_SUCCESS;
+    while (reason == VM_EXEC_SUCCESS) {
         reason = m_Jit->Run();
         if (m_Jit->Regs()[regs::PC] == stopAddr)
             break;

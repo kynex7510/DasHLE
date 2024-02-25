@@ -64,7 +64,7 @@ Expected<void> ELF::visitRelArray32(const Rel32* relArray, usize size) {
                 .patchOffset = rel->r_offset,
                 .addend = 0,
                 .kind = RelocKind::Symbol,
-                .symbolName = symbolName,
+                .symbol = symbolName,
             });
             continue;
         }
@@ -95,7 +95,7 @@ Expected<void> ELF::visitRelaArray32(const Rela32* relaArray, usize size) {
                 .patchOffset = rela->r_offset,
                 .addend = rela->r_addend,
                 .kind = RelocKind::Symbol,
-                .symbolName = symbolName,
+                .symbol = symbolName,
             });
             continue;
         }

@@ -91,6 +91,12 @@ enum class Error {
     InvalidOperation,
 };
 
+enum class GuestVersion {
+    Armeabi,     // v5TE
+    Armeabi_v7a, // v7
+    Arm64_v8a,   // v8
+};
+
 template <typename T>
 concept Copyable = std::is_copy_constructible_v<T> && std::is_copy_assignable_v<T>;
 
@@ -131,9 +137,9 @@ std::string errorAsString(Error error);
 
 template<> 
 struct std::formatter<dashle::Error> : std::formatter<std::string> {
-  auto format(dashle::Error error, std::format_context& ctx) const {
-    std::formatter<std::string>::format(dashle::errorAsString(error), ctx);
-  } 
+    auto format(dashle::Error error, std::format_context& ctx) const {
+        std::formatter<std::string>::format(dashle::errorAsString(error), ctx);
+    } 
 };
 
 #endif /* _DASHLE_SUPPORT_TYPES_H */
