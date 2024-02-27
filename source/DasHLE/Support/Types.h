@@ -138,8 +138,8 @@ std::string errorAsString(Error error);
 template<> 
 struct std::formatter<dashle::Error> : std::formatter<std::string> {
     auto format(dashle::Error error, std::format_context& ctx) const {
-        std::formatter<std::string>::format(dashle::errorAsString(error), ctx);
-    } 
+        return std::formatter<std::string>::format(dashle::errorAsString(error), ctx);
+    }
 };
 
 #endif /* _DASHLE_SUPPORT_TYPES_H */

@@ -48,8 +48,6 @@ class MemoryManager {
     std::unique_ptr<HostAllocator> m_HostAllocator;
     std::unique_ptr<Data> m_Data;
     const usize m_MaxMemory = 0u;
-    const usize m_Width = 0u;
-    const usize m_Offset = 0u;
     usize m_UsedMemory = 0u;
 
     void initialize();
@@ -58,14 +56,12 @@ class MemoryManager {
     void hostFree(AllocatedBlock& block);
 
 public:
-    MemoryManager(std::unique_ptr<HostAllocator> allocator, usize maxMemory, usize width, usize offset);
+    MemoryManager(std::unique_ptr<HostAllocator> allocator, usize maxMemory);
     ~MemoryManager();
 
     usize maxMemory() const { return m_MaxMemory; }
     usize usedMemory() const { return m_UsedMemory; }
     usize availableMemory() const { return maxMemory() - usedMemory(); }
-    usize addressWidth() const { return m_Width; }
-    usize virtualOffset() const { return m_Offset; }
     
     // Free all allocated memory and reset internal state.
     void reset();

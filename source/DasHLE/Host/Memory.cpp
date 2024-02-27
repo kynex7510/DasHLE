@@ -1,5 +1,5 @@
-#include "DasHLE/Host/Memory.h"
 #include "DasHLE/Support/Math.h"
+#include "DasHLE/Host/Memory.h"
 
 #include <set>
 #include <algorithm>
@@ -79,7 +79,7 @@ void MemoryManager::initialize() {
 
     // Add main free block.
     const auto pair = m_Data->freeBlocks.insert({
-        .virtualBase = m_Offset,
+        .virtualBase = 0u,
         .size = maxMemory()
     });
     DASHLE_ASSERT(pair.second);
@@ -126,13 +126,8 @@ void MemoryManager::hostFree(AllocatedBlock& block) {
     m_HostAllocator->free(block);
 }
 
-MemoryManager::MemoryManager(std::unique_ptr<HostAllocator> allocator, usize size, usize width, usize offset)
-    : m_HostAllocator(std::move(allocator)), m_MaxMemory(size), m_Width(width), m_Offset(offset) {
-    DASHLE_ASSERT(addressWidth() < 64);
-
-    const auto maxAddr = static_cast<usize>(1u) << addressWidth();
-    DASHLE_ASSERT(virtualOffset() + maxMemory() <= maxAddr);
-
+MemoryManager::MemoryManager(std::unique_ptr<HostAllocator> allocator, usize size)
+    : m_HostAllocator(std::move(allocator)), m_MaxMemory(size) {
     m_Data = std::make_unique<dashle::host::memory::MemoryManager::Data>();
     initialize();
 }
@@ -383,10 +378,10 @@ Expected<void> MemoryManager::free(uaddr vbase) {
     } else {
         // Handle the case where this is the first allocated block of the set but not the first block in
         // the address space (ie. address space starts with a free block).
-        if (it->virtualBase != virtualOffset()) {
+        if (it->virtualBase != 0u) {
             const auto firstFreeBlock = FreeBlock{
-                .virtualBase = virtualOffset(),
-                .size = it->virtualBase -virtualOffset(),
+                .virtualBase = 0u,
+                .size = it->virtualBase,
             };
             handleBlock(freeBlocks, firstFreeBlock, true);
         }
@@ -405,11 +400,11 @@ Expected<void> MemoryManager::free(uaddr vbase) {
     } else {
         // Handle the case where this is the last allocated block, but not the last in memory (ie. last
         // block is a free one).
-        if ((it->virtualBase + it->size) != (virtualOffset() + maxMemory())) {
+        if ((it->virtualBase + it->size) != maxMemory()) {
             const auto thisAllocBlockEnd = it->virtualBase + it->size;
             const auto lastFreeBlock = FreeBlock{
                 .virtualBase = thisAllocBlockEnd,
-                .size = (virtualOffset() + maxMemory()) - thisAllocBlockEnd
+                .size = maxMemory() - thisAllocBlockEnd
             };
             handleBlock(freeBlocks, lastFreeBlock, false);
         }

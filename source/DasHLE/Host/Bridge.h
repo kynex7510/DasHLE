@@ -63,7 +63,7 @@ class Bridge final {
 
 public:
     Bridge(std::shared_ptr<host::memory::MemoryManager> mem, usize bitness);
-    virtual ~Bridge();
+    ~Bridge();
 
     // Register a host function to be called from the Jit.
     template <usize BITS, auto FN>
@@ -80,7 +80,7 @@ public:
             }
         }
 
-        return EXPECTED_VOID;        
+        return EXPECTED_VOID;
     }
 
     // Register a virtual pointer to a host variable to be used from the Jit.

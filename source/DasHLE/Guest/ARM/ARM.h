@@ -1,11 +1,9 @@
 #ifndef _DASHLE_GUEST_ARM_H
 #define _DASHLE_GUEST_ARM_H
 
-#if defined(DASHLE_HAS_GUEST_ARM)
-
 #include "DasHLE/Host/Memory.h"
 #include "DasHLE/Host/Bridge.h"
-#include "DasHLE/Guest/StackVM.h"
+#include "DasHLE/Guest/VM.h"
 
 namespace dashle::guest::arm {
 
@@ -36,12 +34,14 @@ constexpr static usize FPSCR = R15 + 2;
 
 } // namespace dashle::guest::arm::regs
 
-class ARMVM final : public StackVM {
+class ARMVM final : public VM {
     class Environment;
 
+    std::shared_ptr<host::memory::MemoryManager> m_Mem;
     std::unique_ptr<Environment> m_Env;
     std::unique_ptr<dynarmic::ExclusiveMonitor> m_ExMon;
     std::unique_ptr<dynarmic32::Jit> m_Jit;
+    uaddr m_EndExecVAddr = 0u;
 
     void setPC(uaddr addr);
 
@@ -49,6 +49,7 @@ public:
     ARMVM(std::shared_ptr<host::memory::MemoryManager> mem, std::shared_ptr<host::bridge::Bridge> bridge, GuestVersion version);
     ARMVM(const ARMVM&) = delete;
     ARMVM(ARMVM&&) = default;
+    ~ARMVM();
 
     ARMVM& operator=(const ARMVM&) = delete;
     ARMVM& operator=(ARMVM&&) = default;
@@ -69,11 +70,9 @@ public:
     void setRegister(usize id, u64 value) override;
     u64 getRegister(usize id) const override;
 
-    void dump() const override;
+    void dumpContext() const override;
 };
 
 } // namespace dashle::guest::arm
-
-#endif // DASHLE_HAS_GUEST_ARM
 
 #endif /* _DASHLE_GUEST_ARM_H */

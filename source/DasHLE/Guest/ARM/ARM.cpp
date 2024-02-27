@@ -5,17 +5,6 @@ using namespace dashle;
 using namespace dashle::guest;
 using namespace dashle::guest::arm;
 
-constexpr static usize PAGE_SIZE = 0x1000; // 4KB
-static_assert(dashle::isPowerOfTwo(PAGE_SIZE));
-
-constexpr static usize STACK_SIZE = 1024 * 1024; // 1MB
-static_assert(dashle::alignDown<usize>(STACK_SIZE, PAGE_SIZE) == STACK_SIZE);
-
-constexpr static u32 cpsrThumbEnable(u32 cpsr) { return cpsr | 0x30u; }
-constexpr static u32 cpsrThumbDisable(u32 cpsr) { return cpsr & ~(0x30u); }
-constexpr static bool isThumb(u32 addr) { return addr & 1u; }
-constexpr static u32 clearThumb(u32 addr) { return addr & ~(1u); }
-
 // START DEBUG
 static std::string getPermString(usize flags) {
     std::string permString("---");
@@ -40,7 +29,10 @@ struct ARMVM::Environment final : public dynarmic32::UserCallbacks {
     std::shared_ptr<host::bridge::Bridge> m_Bridge;
 
     Environment(std::shared_ptr<host::memory::MemoryManager> mem, std::shared_ptr<host::bridge::Bridge> bridge)
-        : m_Mem(mem), m_Bridge(bridge) {}
+        : m_Mem(mem), m_Bridge(bridge) {
+        DASHLE_ASSERT(m_Mem);
+        DASHLE_ASSERT(m_Bridge);
+    }
     
     virtual ~Environment() noexcept {}
 
@@ -177,6 +169,11 @@ struct ARMVM::Environment final : public dynarmic32::UserCallbacks {
 
 // ARMVM
 
+constexpr static u32 cpsrThumbEnable(u32 cpsr) { return cpsr | 0x30u; }
+constexpr static u32 cpsrThumbDisable(u32 cpsr) { return cpsr & ~(0x30u); }
+constexpr static bool isThumb(u32 addr) { return addr & 1u; }
+constexpr static u32 clearThumb(u32 addr) { return addr & ~(1u); }
+
 void ARMVM::setPC(uaddr addr) {
     DASHLE_ASSERT(m_Jit);
     const auto cpsr = m_Jit->Cpsr();
@@ -185,8 +182,21 @@ void ARMVM::setPC(uaddr addr) {
 }
 
 ARMVM::ARMVM(std::shared_ptr<host::memory::MemoryManager> mem, std::shared_ptr<host::bridge::Bridge> bridge, GuestVersion version)
-    : StackVM(mem, STACK_SIZE, PAGE_SIZE) {
+    : m_Mem(mem) {
+    DASHLE_ASSERT(m_Mem);
+
+    // Get special address used to know when to terminate execution.
+    DASHLE_ASSERT_WRAPPER_CONST(block, m_Mem->allocate({
+        .size = 4u, // Size of an ARM instruction
+        .alignment = 4u, // Aligned for a correct PC value
+        .flags = 0u, // Must not be accessible
+    }));
+    m_EndExecVAddr = block->virtualBase;
+
+    // Create environment.
     m_Env = std::make_unique<ARMVM::Environment>(mem, bridge);
+
+    // Create exclusive monitor.
     m_ExMon = std::make_unique<dynarmic::ExclusiveMonitor>(1);
 
     // Build config.
@@ -212,9 +222,10 @@ ARMVM::ARMVM(std::shared_ptr<host::memory::MemoryManager> mem, std::shared_ptr<h
     cfg.global_monitor = m_ExMon.get();
 
     // Create jit.
-    m_Jit = std::move(std::make_unique<dynarmic32::Jit>(cfg));
-    m_Jit->Regs()[regs::SP] = m_StackTop;
+    m_Jit = std::make_unique<dynarmic32::Jit>(cfg);
 }
+
+ARMVM::~ARMVM() { DASHLE_ASSERT(m_Mem->free(m_EndExecVAddr)); }
 
 dynarmic::HaltReason ARMVM::execute(Optional<uaddr> wrappedAddr) {
     DASHLE_ASSERT(m_Jit);
@@ -222,15 +233,14 @@ dynarmic::HaltReason ARMVM::execute(Optional<uaddr> wrappedAddr) {
     if (!wrappedAddr)
         return m_Jit->Run();
 
-    const auto stopAddr = m_StackBase;
     DASHLE_ASSERT_WRAPPER_CONST(addr, wrappedAddr);
-    m_Jit->Regs()[regs::LR] = stopAddr;
+    m_Jit->Regs()[regs::LR] = m_EndExecVAddr;
     setPC(addr);
 
     auto reason = VM_EXEC_SUCCESS;
     while (reason == VM_EXEC_SUCCESS) {
         reason = m_Jit->Run();
-        if (m_Jit->Regs()[regs::PC] == stopAddr)
+        if (m_Jit->Regs()[regs::PC] == m_EndExecVAddr)
             break;
 
         DASHLE_LOG_LINE("PC: 0x{:X}, LR: 0x{:X}", m_Jit->Regs()[regs::PC], m_Jit->Regs()[regs::LR]);
@@ -286,7 +296,7 @@ u64 ARMVM::getRegister(usize id) const {
     DASHLE_UNREACHABLE("Invalid ID!");
 }
 
-void ARMVM::dump() const {
+void ARMVM::dumpContext() const {
     if constexpr(dashle::DEBUG_MODE) {
         DASHLE_ASSERT(m_Jit);
 

@@ -57,6 +57,9 @@ Expected<void> Bridge::registerVariable(const std::string& symbol, uaddr vaddr) 
 }
 
 Expected<void> Bridge::buildIFT() {
+    if (hasBuiltIFT())
+        return Unexpected(Error::InvalidOperation);
+
     // Allocate IFT: a table of reserved addresses which act as pseudo addresses for imported functions.
     // You can imagine as if the whole function is contained within its entry address, the Jit will jump to the
     // correct function when executing from one of the entries. 

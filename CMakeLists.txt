@@ -40,8 +40,10 @@ if ("AArch64" IN_LIST DASHLE_GUESTS)
 endif()
 
 # Common
-file(GLOB DasHLE_SOURCES 
-    "${CMAKE_SOURCE_DIR}/source/DasHLE/Error.cpp" # TODO: pick any.
+file(GLOB DasHLE_SOURCES
+    # TODO: while this is OK it currently picks Main.cpp
+    # The file must be removed once we switch to application development.
+    "${CMAKE_SOURCE_DIR}/source/DasHLE/*.cpp"
     "${CMAKE_SOURCE_DIR}/source/DasHLE/Binary/*.cpp"
     "${CMAKE_SOURCE_DIR}/source/DasHLE/Host/*.cpp"
     "${CMAKE_SOURCE_DIR}/source/DasHLE/Guest/*.cpp"
@@ -53,7 +55,7 @@ add_executable(DasHLE
     ${DasHLE_GUEST_SOURCES}
     ${DasHLE_SOURCES})
 
-target_include_directories(DasHLE "${CMAKE_SOURCE_DIR}/source")
+target_include_directories(DasHLE PUBLIC "${CMAKE_SOURCE_DIR}/source")
 
 if ("ARM" IN_LIST DASHLE_TARGETS)
     target_compile_definitions(DasHLE PUBLIC DASHLE_HAS_GUEST_ARM)

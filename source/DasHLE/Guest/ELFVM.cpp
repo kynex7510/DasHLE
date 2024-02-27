@@ -1,4 +1,4 @@
-#include "DasHLE/Binary/ELF.h"
+#include "DasHLE/Support/Math.h"
 #include "DasHLE/Guest/ELFVM.h"
 
 using namespace dashle;
@@ -45,34 +45,44 @@ static void arrayRead(std::vector<usize>& entries, uaddr addr, usize numEntries)
     }
 }
 
-Expected<void> ELFVM::runInitializers() {
-    if (!m_VM.holdsAny())
-        return Unexpected(Error::InvalidOperation);
+ELFVM::ELFVM(std::shared_ptr<host::memory::MemoryManager> mem, usize pageSize, usize stackSize)
+    : m_Mem(mem), m_PageSize(pageSize) {
+    DASHLE_ASSERT(m_Mem);
+    // Alignment must be a power of two.
+    DASHLE_ASSERT(dashle::isPowerOfTwo(m_PageSize));
+    // Stack size must be page aligned.
+    DASHLE_ASSERT(dashle::alignDown(stackSize, m_PageSize) == stackSize);
 
-    for (auto vaddr : m_Initializers) {
-        if (auto reason = m_VM->execute(vaddr); reason != VM_EXEC_SUCCESS) {
-            DASHLE_UNREACHABLE("Init call failed (vaddr=0x{:X}, reason={})", vaddr, static_cast<u32>(reason));
-        }
-    }
+    // Allocate null block.
+    DASHLE_ASSERT(m_Mem->allocate({
+        .size = m_PageSize,
+        .hint = 0u,
+        .flags = host::memory::flags::FORCE_HINT,
+    }));
 
-    return EXPECTED_VOID;
+    // Allocate stack.
+    DASHLE_ASSERT_WRAPPER_CONST(block, m_Mem->allocate({
+        .size = stackSize,
+        .alignment = m_PageSize,
+        .hint = m_Mem->maxMemory() - stackSize,
+        .flags = host::memory::flags::PERM_READ_WRITE | host::memory::flags::FORCE_HINT
+    }));
+    m_StackBase = block->virtualBase;
+    m_StackTop = m_StackBase + block->size;
 }
 
-Expected<void> ELFVM::runFinalizers() {
-    if (!m_VM.holdsAny())
-        return Unexpected(Error::InvalidOperation);
-
-    for (auto vaddr : m_Finalizers) {
-        if (auto reason = m_VM->execute(vaddr); reason != VM_EXEC_SUCCESS) {
-            DASHLE_UNREACHABLE("Fini call failed (vaddr=0x{:X}, reason={})", vaddr, static_cast<u32>(reason));
-        }
+ELFVM::~ELFVM() {
+    // Free loaded segments.
+    for (auto vaddr : m_LoadedSegments) {
+        DASHLE_ASSERT(m_Mem->free(vaddr));
     }
 
-    return EXPECTED_VOID;
-}
+    // Free stack.
+    DASHLE_ASSERT(m_Mem->free(m_StackBase));
 
-ELFVM::ELFVM(std::shared_ptr<host::memory::MemoryManager> mem, std::shared_ptr<host::bridge::Bridge> bridge)
-    : m_Mem(mem), m_Bridge(bridge) {}
+    // Free null block.
+    DASHLE_ASSERT(m_Mem->free(0u));
+}
 
 Expected<void> ELFVM::loadBinary(std::vector<u8>&& buffer) {
     const auto virtualToHost = [this](uaddr vaddr) -> Expected<uaddr> {
@@ -101,6 +111,11 @@ Expected<void> ELFVM::loadBinary(std::vector<u8>&& buffer) {
     if (!canRun(m_Elf))
         return Unexpected(Error::InvalidArch);
 
+    // Create bridge.
+    m_Bridge = std::make_shared<host::bridge::Bridge>(m_Mem, m_Elf.is64Bits() ? dashle::BITS_64 : dashle::BITS_32);
+    DASHLE_TRY_EXPECTED_VOID(populateBridge());
+    DASHLE_TRY_EXPECTED_VOID(m_Bridge->buildIFT());
+
     // Get ELF LOAD segments.
     std::vector<LoadSegmentInfo> loadSegmentsInfo;
     DASHLE_TRY_EXPECTED_CONST(loadSegments, m_Elf.segmentsOfType(elf::PT_LOAD));
@@ -123,16 +138,15 @@ Expected<void> ELFVM::loadBinary(std::vector<u8>&& buffer) {
     }
 
     // Get binary base.
-    // TODO: check alignment for aarch64.
-    const usize alignment = 0x1000;
-    DASHLE_TRY_EXPECTED_CONST(binaryBase, m_Mem->findFreeAddr(binaryAllocSize, alignment));
+    DASHLE_TRY_EXPECTED_CONST(binaryBase, m_Mem->findFreeAddr(binaryAllocSize, m_PageSize));
     DASHLE_LOG_LINE("Binary base: 0x{:X}", binaryBase);
 
     // Allocate and map each segment.
+    m_LoadedSegments.clear();
     for (const auto& segmentInfo : loadSegmentsInfo) {
         DASHLE_TRY_EXPECTED_CONST(block, m_Mem->allocate({
             .size = segmentInfo.allocSize,
-            .alignment = alignment,
+            .alignment = m_PageSize,
             .hint = binaryBase + segmentInfo.allocOffset,
             .flags = host::memory::flags::PERM_READ_WRITE | host::memory::flags::FORCE_HINT,
         }));
@@ -140,6 +154,8 @@ Expected<void> ELFVM::loadBinary(std::vector<u8>&& buffer) {
         std::copy(buffer.data() + segmentInfo.fileDataOffset,
             buffer.data() + segmentInfo.fileDataOffset + segmentInfo.fileDataSize,
             reinterpret_cast<u8*>(block->hostBase) + segmentInfo.memDataOffset);
+
+        m_LoadedSegments.push_back(block->virtualBase);
     }
 
     // Handle relocations.
@@ -177,6 +193,7 @@ Expected<void> ELFVM::loadBinary(std::vector<u8>&& buffer) {
     if (initWrapper) {
         const auto& initArrayInfo = initWrapper.value();
         DASHLE_TRY_EXPECTED_CONST(initArray, virtualToHost(binaryBase + initArrayInfo.offset));
+        m_Initializers.clear();
         if (m_Elf.is64Bits()) {
             arrayRead<elf::Addr64>(m_Initializers, initArray, initArrayInfo.size);
         } else {
@@ -188,6 +205,7 @@ Expected<void> ELFVM::loadBinary(std::vector<u8>&& buffer) {
     if (finiWrapper) {
         const auto& finiArrayInfo = finiWrapper.value();
         DASHLE_TRY_EXPECTED_CONST(finiArray, virtualToHost(binaryBase + finiArrayInfo.offset));
+        m_Finalizers.clear();
         if (m_Elf.is64Bits()) {
             arrayRead<elf::Addr64>(m_Finalizers, finiArray, finiArrayInfo.size);
         } else {
@@ -200,9 +218,10 @@ Expected<void> ELFVM::loadBinary(std::vector<u8>&& buffer) {
         DASHLE_UNREACHABLE("Guest not supported!");
     } else {
 #if defined(DASHLE_HAS_GUEST_ARM)
-            m_VM = arm::ARMVM(m_Mem, m_Bridge, m_Elf.version());
+        m_VM = std::make_unique<arm::ARMVM>(m_Mem, m_Bridge, m_Elf.version());
+        m_VM->setRegister(arm::regs::SP, m_StackTop);
 #else
-            DASHLE_UNREACHABLE("Guest not supported!");
+        DASHLE_UNREACHABLE("Guest not supported!");
 #endif // DASHLE_HAS_GUEST_ARM
     }
 
@@ -211,7 +230,33 @@ Expected<void> ELFVM::loadBinary(std::vector<u8>&& buffer) {
 
 Expected<void> ELFVM::loadBinary(const host::fs::path& path) {
     std::vector<u8> buffer;
-    return host::fs::readFile(path, buffer).and_then([this, &buffer](){
+    return host::fs::readFile(path, buffer).and_then([&](){
         return loadBinary(std::move(buffer));
     });
+}
+
+Expected<void> ELFVM::runInitializers() {
+    if (!m_VM)
+        return Unexpected(Error::InvalidOperation);
+
+    for (auto vaddr : m_Initializers) {
+        if (auto reason = m_VM->execute(vaddr); reason != VM_EXEC_SUCCESS) {
+            DASHLE_UNREACHABLE("Init call failed (vaddr=0x{:X}, reason={})", vaddr, static_cast<u32>(reason));
+        }
+    }
+
+    return EXPECTED_VOID;
+}
+
+Expected<void> ELFVM::runFinalizers() {
+    if (!m_VM)
+        return Unexpected(Error::InvalidOperation);
+
+    for (auto vaddr : m_Finalizers) {
+        if (auto reason = m_VM->execute(vaddr); reason != VM_EXEC_SUCCESS) {
+            DASHLE_UNREACHABLE("Fini call failed (vaddr=0x{:X}, reason={})", vaddr, static_cast<u32>(reason));
+        }
+    }
+
+    return EXPECTED_VOID;
 }
