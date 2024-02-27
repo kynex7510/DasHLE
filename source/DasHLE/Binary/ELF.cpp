@@ -210,14 +210,14 @@ Expected<void> ELF::parse(std::vector<u8>&& buffer) {
 
     // Set header.
     if (bits64) {
-        m_Header = Header32(reinterpret_cast<const Ehdr32*>(binaryBase()));
-    } else {
         m_Header = Header64(reinterpret_cast<const Ehdr64*>(binaryBase()));
+    } else {
+        m_Header = Header32(reinterpret_cast<const Ehdr32*>(binaryBase()));
     }
 
     // Check size.
-    if ((bits64 && buffer.size() < sizeof(Ehdr64)) ||
-        (!bits64 && buffer.size() < sizeof(Ehdr32)) ||
+    if (bits64 && (m_Buffer.size() < sizeof(Ehdr64)) ||
+        !bits64 && (m_Buffer.size() < sizeof(Ehdr32)) ||
         m_Buffer.size() < m_Header->ehsize())
         return Unexpected(Error::InvalidSize);
 
@@ -310,7 +310,7 @@ Expected<ELF::ProgramHeader> ELF::programHeader(usize index) const {
 Expected<std::vector<ELF::SectionHeader>> ELF::sectionsOfType(Word type) const {
     std::vector<SectionHeader> sections;
 
-    for (const auto& section : sections) {
+    for (const auto& section : sectionHeaders()) {
         if (section->type() == type)
             sections.push_back(section);
     }
@@ -321,7 +321,7 @@ Expected<std::vector<ELF::SectionHeader>> ELF::sectionsOfType(Word type) const {
 Expected<std::vector<ELF::ProgramHeader>> ELF::segmentsOfType(Word type) const {
     std::vector<ProgramHeader> segments;
 
-    for (const auto& segment : segments) {
+    for (const auto& segment : programHeaders()) {
         if (segment->type() == type)
             segments.push_back(segment);
     }
@@ -359,7 +359,7 @@ Expected<std::vector<ELF::DynEntry>> ELF::dynEntriesWithTag(Sword tag) const {
 Expected<ELF::DynEntry> ELF::dynEntryWithTag(Sword tag) const {
     DASHLE_TRY_EXPECTED_CONST(entries, dynEntriesWithTag(tag));
     if (entries.size() != 1)
-        return Unexpected(Error::InvalidSize);
+        return Unexpected(Error::InvalidOperation);
 
     return entries[0];
 }
