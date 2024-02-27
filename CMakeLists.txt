@@ -30,12 +30,12 @@ endif()
 
 # Guests
 if ("ARM" IN_LIST DASHLE_GUESTS)
-    file(GLOB DasHLE_ARM_SOURCES "${CMAKE_SOURCE_DIR}/source/DasHLE/Host/ARM/*.cpp")
+    file(GLOB DasHLE_ARM_SOURCES "${CMAKE_SOURCE_DIR}/source/DasHLE/Guest/ARM/*.cpp")
     list(APPEND DasHLE_GUEST_SOURCES ${DasHLE_ARM_SOURCES})
 endif()
 
 if ("AArch64" IN_LIST DASHLE_GUESTS)
-    file(GLOB DasHLE_AARCH64_SOURCES "${CMAKE_SOURCE_DIR}/source/DasHLE/Host/AArch64/*.cpp")
+    file(GLOB DasHLE_AARCH64_SOURCES "${CMAKE_SOURCE_DIR}/source/DasHLE/Guest/AArch64/*.cpp")
     list(APPEND DasHLE_GUEST_SOURCES ${DasHLE_AARCH64_SOURCES})
 endif()
 
@@ -57,11 +57,11 @@ add_executable(DasHLE
 
 target_include_directories(DasHLE PUBLIC "${CMAKE_SOURCE_DIR}/source")
 
-if ("ARM" IN_LIST DASHLE_TARGETS)
+if ("ARM" IN_LIST DASHLE_GUESTS)
     target_compile_definitions(DasHLE PUBLIC DASHLE_HAS_GUEST_ARM)
 endif()
 
-if ("AArch64" IN_LIST DASHLE_TARGETS)
+if ("AArch64" IN_LIST DASHLE_GUESTS)
     target_compile_definitions(DasHLE PUBLIC DASHLE_HAS_GUEST_AARCH64)
 endif()
 
