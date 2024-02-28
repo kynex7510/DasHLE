@@ -173,7 +173,27 @@ Expected<void> ELFVM::loadBinary(std::vector<u8>&& buffer) {
 
         if (reloc.kind == elf::RelocKind::Symbol) {
             DASHLE_ASSERT_WRAPPER_CONST(symbol, reloc.symbol);
-            DASHLE_TRY_EXPECTED_CONST(vaddr, m_Bridge->addressForSymbol(symbol));
+
+            uaddr vaddr = 0u;
+            if constexpr (dashle::DEBUG_MODE) {
+                static uaddr fakeAddr = 0u;
+                static std::unordered_map<std::string, uaddr> cache;
+                vaddr = m_Bridge->addressForSymbol(symbol).or_else([&](dashle::Error) -> Expected<uaddr> {
+                    if (cache.contains(symbol)) {
+                        return cache[symbol];
+                    }
+
+                    auto fake = fakeAddr;
+                    fakeAddr += 4u;
+                    cache[symbol] = fake;
+                    DASHLE_LOG_LINE("MISSING IMPORT: \"{}\" (0x{:X})", symbol, fake);
+                    return fake;
+                }).value();
+            } else {
+                DASHLE_TRY_EXPECTED_CONST(vaddr2, m_Bridge->addressForSymbol(symbol));
+                vaddr = vaddr2;
+            }
+
             // We ignore the addend.
             relocWriteVAddr(patchAddr, vaddr);
             continue;
@@ -242,6 +262,9 @@ Expected<void> ELFVM::runInitializers() {
         if (auto reason = m_VM->execute(vaddr); reason != VM_EXEC_SUCCESS) {
             DASHLE_UNREACHABLE("Init call failed (vaddr=0x{:X}, reason={})", vaddr, static_cast<u32>(reason));
         }
+        // DEBUG
+        DASHLE_LOG_LINE("Exec'ed 0x{:X}", vaddr);
+        // END DEBUG
     }
 
     return EXPECTED_VOID;

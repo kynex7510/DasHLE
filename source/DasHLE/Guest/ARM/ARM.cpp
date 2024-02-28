@@ -55,7 +55,7 @@ struct ARMVM::Environment final : public dynarmic32::UserCallbacks {
             DASHLE_ASSERT(block);
             if (verbose && !(block.value()->flags & flags)) {
                 DASHLE_LOG_LINE("Invalid flags (expected={}, found={})", getPermString(flags), getPermString(block.value()->flags));
-                DASHLE_LOG_LINE("Trying to read 0x{:X}", vaddr);
+                DASHLE_LOG_LINE("Trying to access 0x{:X}", vaddr);
                 DASHLE_LOG_LINE("Gonna assert wawa");
             }
             DASHLE_ASSERT(block.value()->flags & flags);

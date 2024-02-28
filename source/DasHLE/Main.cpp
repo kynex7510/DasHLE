@@ -43,5 +43,6 @@ int main() {
 
     successOrDie(vm.loadBinary(BINARY_PATH));
     successOrDie(vm.runInitializers());
+    DASHLE_LOG_LINE("DONE!");
     return 0;
 }
