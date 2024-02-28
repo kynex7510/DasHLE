@@ -139,7 +139,6 @@ Expected<void> ELFVM::loadBinary(std::vector<u8>&& buffer) {
 
     // Get binary base.
     DASHLE_TRY_EXPECTED_CONST(binaryBase, m_Mem->findFreeAddr(binaryAllocSize, m_PageSize));
-    DASHLE_LOG_LINE("Binary base: 0x{:X}", binaryBase);
 
     // Allocate and map each segment.
     m_LoadedSegments.clear();
@@ -151,8 +150,8 @@ Expected<void> ELFVM::loadBinary(std::vector<u8>&& buffer) {
             .flags = host::memory::flags::PERM_READ_WRITE | host::memory::flags::FORCE_HINT,
         }));
 
-        std::copy(buffer.data() + segmentInfo.fileDataOffset,
-            buffer.data() + segmentInfo.fileDataOffset + segmentInfo.fileDataSize,
+        std::copy(m_Elf.buffer().data() + segmentInfo.fileDataOffset,
+            m_Elf.buffer().data() + segmentInfo.fileDataOffset + segmentInfo.fileDataSize,
             reinterpret_cast<u8*>(block->hostBase) + segmentInfo.memDataOffset);
 
         m_LoadedSegments.push_back(block->virtualBase);

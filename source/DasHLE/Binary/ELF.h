@@ -450,7 +450,7 @@ public:
 
 private:
     std::vector<u8> m_Buffer;
-    GuestVersion m_Version = GuestVersion::Armeabi_v7a;
+    GuestVersion m_Version = GuestVersion::Armeabi;
     Header m_Header;
     std::vector<SectionHeader> m_SectionHeaders;
     std::vector<ProgramHeader> m_ProgramHeaders;
@@ -479,6 +479,7 @@ private:
 
 public:
     Expected<void> parse(std::vector<u8>&& buffer);
+    const std::span<const u8> buffer() const { return m_Buffer; }
     GuestVersion version() const { return m_Version; }
     bool is64Bits() const { return version() == GuestVersion::Arm64_v8a; }
     const std::span<const RelocInfo> relocs() const { return m_Relocs; }
