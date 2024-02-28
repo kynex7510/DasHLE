@@ -6,6 +6,9 @@ using namespace dashle::host::bridge;
 // To the Jit an IFT entry is just a location to some instruction.
 constexpr static usize ENTRY_SIZE = 4u;
 
+// Special address used when no functions are set.
+constexpr static auto IFT_NO_FUNC = static_cast<usize>(-1);
+
 // Bridge
 
 Expected<void> Bridge::registerFunctionImpl(const std::string& symbol, Emitter emitter) {
@@ -40,7 +43,11 @@ Bridge::Bridge(std::shared_ptr<host::memory::MemoryManager> mem, usize bitness)
     DASHLE_ASSERT(m_Bitness == dashle::BITS_32 || m_Bitness == dashle::BITS_64);
 }
 
-Bridge::~Bridge() { DASHLE_ASSERT(m_Mem->free(m_IFTBase)); }
+Bridge::~Bridge() {
+    if (hasBuiltIFT() && m_IFTBase != IFT_NO_FUNC) {
+        DASHLE_ASSERT(m_Mem->free(m_IFTBase));
+    }
+}
 
 Expected<void> Bridge::registerVariable(const std::string& symbol, uaddr vaddr) {
     if (hasBuiltIFT())
@@ -60,6 +67,12 @@ Expected<void> Bridge::buildIFT() {
     if (hasBuiltIFT())
         return Unexpected(Error::InvalidOperation);
 
+    // Handle the case when we dont have functions.
+    if (m_FuncEntries.empty()) {
+        m_IFTBase = IFT_NO_FUNC;
+        return EXPECTED_VOID;
+    }
+
     // Allocate IFT: a table of reserved addresses which act as pseudo addresses for imported functions.
     // You can imagine as if the whole function is contained within its entry address, the Jit will jump to the
     // correct function when executing from one of the entries. 
@@ -72,19 +85,14 @@ Expected<void> Bridge::buildIFT() {
     m_IFTBase = block->virtualBase;
 
     // Rebase addresses.
-    SymbolMap funcEntries;
-    while (m_FuncEntries.begin() != m_FuncEntries.end()) {
-        auto node = m_FuncEntries.extract(m_FuncEntries.begin());
-        funcEntries.insert({ node.key(), m_IFTBase + node.mapped() });
-    }
+    for (auto &[_, value] : m_FuncEntries)
+        value += m_IFTBase;
 
     EmitterMap emitters;
     while (m_Emitters.begin() != m_Emitters.end()) {
         auto node = m_Emitters.extract(m_Emitters.begin());
         emitters.insert( { m_IFTBase +  node.key(), node.mapped() });
     }
-
-    m_FuncEntries = std::move(funcEntries);
     m_Emitters = std::move(emitters);
 
     return EXPECTED_VOID;
