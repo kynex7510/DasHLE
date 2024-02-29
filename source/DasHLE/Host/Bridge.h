@@ -43,15 +43,16 @@ class Bridge final {
     EmitterMap m_Emitters;
 
     template <auto FN>
-    void emitCall32(dynarmic32::IREmitter* ir) {
+    static void emitCall32(dynarmic32::IREmitter* ir) {
         // TODO
         // ir->CallHostFunctionWithGuestABI(FN);
+        ir->CallHostFunction(reinterpret_cast<void(*)()>(FN));
         ir->BXWritePC(ir->GetRegister(dynarmic32::Reg::LR));
         ir->SetTerm(dynarmic_ir::Term::ReturnToDispatch{});
     }
 
     template <auto FN>
-    void emitCall64(dynarmic64::IREmitter* ir) {
+    static void emitCall64(dynarmic64::IREmitter* ir) {
         DASHLE_UNREACHABLE("Unimplemented!");
     }
 
