@@ -36,6 +36,8 @@ public:
     Expected<void> loadBinary(std::vector<u8>&& buffer);
     Expected<void> loadBinary(const host::fs::path& path);
 
+    VM* core() { return m_VM.get(); }
+
     Expected<void> runInitializers();
     Expected<void> runFinalizers();
 };

@@ -15,7 +15,7 @@ git clone -j$(nproc) https://github.com/kynex7510/DasHLE
 ```
 mkdir build
 cd build
-cmake -DCMAKE_BUILD_TYPE=Debug -DDASHLE_HOST=Linux -DDASHLE_GUESTS=ARM ..
+cmake -DCMAKE_BUILD_TYPE=Debug -DCPM_Dynarmic_SOURCE=/home/user/Documents/repos/dynarmic -DDASHLE_HOST=Linux -DDASHLE_GUESTS=ARM ..
 make -j$(nproc)
 ```
 

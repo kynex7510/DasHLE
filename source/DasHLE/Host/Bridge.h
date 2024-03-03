@@ -44,9 +44,7 @@ class Bridge final {
 
     template <auto FN>
     static void emitCall32(dynarmic32::IREmitter* ir) {
-        // TODO
-        // ir->CallHostFunctionWithGuestABI(FN);
-        ir->CallHostFunction(reinterpret_cast<void(*)()>(FN));
+        ir->CallHostFunctionWithGuestABI(FN);
         ir->BXWritePC(ir->GetRegister(dynarmic32::Reg::LR));
         ir->SetTerm(dynarmic_ir::Term::ReturnToDispatch{});
     }

@@ -1,9 +1,15 @@
 #include "DasHLE/Support/Math.h"
-#include "DasHLE/Guest/ARM/ARM.h"
+#include "DasHLE/Guest/AArch64/AArch64.h"
 
 using namespace dashle;
 using namespace dashle::guest;
-using namespace dashle::guest::arm;
+using namespace dashle::guest::aarch64;
+
+constexpr static usize PAGE_SIZE = 0x1000; // 4KB
+static_assert(dashle::isPowerOfTwo(PAGE_SIZE));
+
+constexpr static usize STACK_SIZE = 1024 * 1024; // 1MB
+static_assert(dashle::alignDown<usize>(STACK_SIZE, PAGE_SIZE) == STACK_SIZE);
 
 // START DEBUG
 static std::string getPermString(usize flags) {
@@ -24,15 +30,12 @@ static std::string getPermString(usize flags) {
 
 // Environment
 
-struct ARMVM::Environment final : public dynarmic32::UserCallbacks {
+struct AArch64VM::Environment final : public dynarmic64::UserCallbacks {
     std::shared_ptr<host::memory::MemoryManager> m_Mem;
     std::shared_ptr<host::bridge::Bridge> m_Bridge;
 
     Environment(std::shared_ptr<host::memory::MemoryManager> mem, std::shared_ptr<host::bridge::Bridge> bridge)
-        : m_Mem(mem), m_Bridge(bridge) {
-        DASHLE_ASSERT(m_Mem);
-        DASHLE_ASSERT(m_Bridge);
-    }
+        : m_Mem(mem), m_Bridge(bridge) {}
     
     virtual ~Environment() noexcept {}
 
@@ -55,7 +58,7 @@ struct ARMVM::Environment final : public dynarmic32::UserCallbacks {
             DASHLE_ASSERT(block);
             if (verbose && !(block.value()->flags & flags)) {
                 DASHLE_LOG_LINE("Invalid flags (expected={}, found={})", getPermString(flags), getPermString(block.value()->flags));
-                DASHLE_LOG_LINE("Trying to access 0x{:X}", vaddr);
+                DASHLE_LOG_LINE("Trying to read 0x{:X}", vaddr);
                 DASHLE_LOG_LINE("Gonna assert wawa");
             }
             DASHLE_ASSERT(block.value()->flags & flags);
@@ -66,11 +69,13 @@ struct ARMVM::Environment final : public dynarmic32::UserCallbacks {
 
     /* Dynarmic callbacks */
 
+    /*
     bool PreCodeReadHook(bool isThumb, dynarmic32::VAddr pc, dynarmic32::IREmitter& ir) override {
         return !m_Bridge->emitCall(pc, &ir);
     }
+    */
 
-    std::optional<std::uint32_t> MemoryReadCode(dynarmic32::VAddr vaddr) override {
+    std::optional<std::uint32_t> MemoryReadCode(dynarmic64::VAddr vaddr) override {
         const auto hostAddr = virtualToHostChecked(vaddr, host::memory::flags::PERM_EXEC);
         if (hostAddr)
             return *reinterpret_cast<const std::uint32_t*>(hostAddr.value());
@@ -78,71 +83,71 @@ struct ARMVM::Environment final : public dynarmic32::UserCallbacks {
         return {};
     }
 
-    std::uint8_t MemoryRead8(dynarmic32::VAddr vaddr) override {
+    std::uint8_t MemoryRead8(dynarmic64::VAddr vaddr) override {
         DASHLE_ASSERT_WRAPPER_CONST(addr, virtualToHostChecked(vaddr, host::memory::flags::PERM_READ));
         return *reinterpret_cast<const std::uint8_t*>(addr);
     }
 
-    std::uint16_t MemoryRead16(dynarmic32::VAddr vaddr) override {
+    std::uint16_t MemoryRead16(dynarmic64::VAddr vaddr) override {
         DASHLE_ASSERT_WRAPPER_CONST(addr, virtualToHostChecked(vaddr, host::memory::flags::PERM_READ));
         return *reinterpret_cast<const std::uint16_t*>(addr);
     }
 
-    std::uint32_t MemoryRead32(dynarmic32::VAddr vaddr) override {
+    std::uint32_t MemoryRead32(dynarmic64::VAddr vaddr) override {
         DASHLE_ASSERT_WRAPPER_CONST(addr, virtualToHostChecked(vaddr, host::memory::flags::PERM_READ));
         return *reinterpret_cast<const std::uint32_t*>(addr);
     }
 
-    std::uint64_t MemoryRead64(dynarmic32::VAddr vaddr) override {
+    std::uint64_t MemoryRead64(dynarmic64::VAddr vaddr) override {
         DASHLE_ASSERT_WRAPPER_CONST(addr, virtualToHostChecked(vaddr, host::memory::flags::PERM_READ));
         return *reinterpret_cast<const std::uint64_t*>(addr);
     }
 
-    void MemoryWrite8(dynarmic32::VAddr vaddr, std::uint8_t value) override {
+    void MemoryWrite8(dynarmic64::VAddr vaddr, std::uint8_t value) override {
         DASHLE_ASSERT_WRAPPER_CONST(addr, virtualToHostChecked(vaddr, host::memory::flags::PERM_WRITE));
         *reinterpret_cast<std::uint8_t*>(addr) = value;
     }
 
-    void MemoryWrite16(dynarmic32::VAddr vaddr, std::uint16_t value) override {
+    void MemoryWrite16(dynarmic64::VAddr vaddr, std::uint16_t value) override {
         DASHLE_ASSERT_WRAPPER_CONST(addr, virtualToHostChecked(vaddr, host::memory::flags::PERM_WRITE));
         *reinterpret_cast<std::uint16_t*>(addr) = value;
     }
 
-    void MemoryWrite32(dynarmic32::VAddr vaddr, std::uint32_t value) override {
+    void MemoryWrite32(dynarmic64::VAddr vaddr, std::uint32_t value) override {
         DASHLE_ASSERT_WRAPPER_CONST(addr, virtualToHostChecked(vaddr, host::memory::flags::PERM_WRITE));
         *reinterpret_cast<std::uint32_t*>(addr) = value;
     }
         
-    void MemoryWrite64(dynarmic32::VAddr vaddr, std::uint64_t value) override {
+    void MemoryWrite64(dynarmic64::VAddr vaddr, std::uint64_t value) override {
         DASHLE_ASSERT_WRAPPER_CONST(addr, virtualToHostChecked(vaddr, host::memory::flags::PERM_WRITE));
         *reinterpret_cast<std::uint64_t*>(addr) = value;
     }
 
-    bool MemoryWriteExclusive8(dynarmic32::VAddr vaddr, std::uint8_t value, std::uint8_t expected) override {
+    bool MemoryWriteExclusive8(dynarmic64::VAddr vaddr, std::uint8_t value, std::uint8_t expected) override {
         // TODO
         MemoryWrite8(vaddr, value);
         return true;
     }
 
-    bool MemoryWriteExclusive16(dynarmic32::VAddr vaddr, std::uint16_t value, std::uint16_t expected) override {
+    bool MemoryWriteExclusive16(dynarmic64::VAddr vaddr, std::uint16_t value, std::uint16_t expected) override {
         // TODO
         MemoryWrite16(vaddr, value);
         return true;
     }
 
-    bool MemoryWriteExclusive32(dynarmic32::VAddr vaddr, std::uint32_t value, std::uint32_t expected) override {
+    bool MemoryWriteExclusive32(dynarmic64::VAddr vaddr, std::uint32_t value, std::uint32_t expected) override {
         // TODO
         MemoryWrite32(vaddr, value);
         return true;
     }
 
-    bool MemoryWriteExclusive64(dynarmic32::VAddr vaddr, std::uint64_t value, std::uint64_t expected) override {
+    bool MemoryWriteExclusive64(dynarmic64::VAddr vaddr, std::uint64_t value, std::uint64_t expected) override {
         // TODO
         MemoryWrite64(vaddr, value);
         return true;
     }
 
-    bool IsReadOnlyMemory(dynarmic32::VAddr vaddr) override {
+    bool IsReadOnlyMemory(dynarmic64::VAddr vaddr) override {
         DASHLE_ASSERT(m_Mem);
         if (auto block = m_Mem->blockFromVAddr(vaddr))
             return !(block.value()->flags & host::memory::flags::PERM_WRITE);
@@ -150,7 +155,7 @@ struct ARMVM::Environment final : public dynarmic32::UserCallbacks {
         return false;
     }
 
-    void InterpreterFallback(dynarmic32::VAddr pc, usize numInstructions) override {
+    void InterpreterFallback(dynarmic64::VAddr pc, usize numInstructions) override {
         DASHLE_UNREACHABLE("Interpreter invoked (pc={}, numInstructions={})", pc, numInstructions);
     }
 
@@ -158,7 +163,7 @@ struct ARMVM::Environment final : public dynarmic32::UserCallbacks {
         DASHLE_UNREACHABLE("Unimplemented syscall (swi={})", swi);
     }
 
-    void ExceptionRaised(dynarmic32::VAddr pc, dynarmic32::Exception exception) override {
+    void ExceptionRaised(dynarmic64::VAddr pc, dynarmic64::Exception exception) override {
         // TODO: handle exceptions.
         DASHLE_UNREACHABLE("Unimplemented exception handling (pc=0x{:X}, exception={})", pc, static_cast<u32>(exception));
     }
@@ -167,104 +172,70 @@ struct ARMVM::Environment final : public dynarmic32::UserCallbacks {
     std::uint64_t GetTicksRemaining() override { return static_cast<u64>(-1); }
 };
 
-// ARMVM
+// AArch64VM
 
-constexpr static u32 cpsrThumbEnable(u32 cpsr) { return cpsr | 0x30u; }
-constexpr static u32 cpsrThumbDisable(u32 cpsr) { return cpsr & ~(0x30u); }
-constexpr static bool isThumb(u32 addr) { return addr & 1u; }
-constexpr static u32 clearThumb(u32 addr) { return addr & ~(1u); }
-
-void ARMVM::setPC(uaddr addr) {
-    DASHLE_ASSERT(m_Jit);
-    const auto cpsr = m_Jit->Cpsr();
-    m_Jit->SetCpsr(isThumb(addr) ? cpsrThumbEnable(cpsr) : cpsrThumbDisable(cpsr));
-    m_Jit->Regs()[regs::PC] = clearThumb(addr);
+AArch64VM::AArch64VM(std::shared_ptr<host::memory::MemoryManager> mem, std::shared_ptr<host::bridge::Bridge> bridge)
+    : StackVM(mem, STACK_SIZE, PAGE_SIZE) {
+    m_Env = std::make_unique<AArch64VM::Environment>(mem, bridge);
+    m_ExMon = std::make_unique<dynarmic::ExclusiveMonitor>(1);
 }
 
-ARMVM::ARMVM(std::shared_ptr<host::memory::MemoryManager> mem, std::shared_ptr<host::bridge::Bridge> bridge, GuestVersion version)
-    : m_Mem(mem) {
-    DASHLE_ASSERT(m_Mem);
-
-    // Get special address used to know when to terminate execution.
-    DASHLE_ASSERT_WRAPPER_CONST(block, m_Mem->allocate({
-        .size = 4u, // Size of an ARM instruction
-        .alignment = 4u, // Aligned for a correct PC value
-        .flags = 0u, // Must not be accessible
-    }));
-    m_EndExecVAddr = block->virtualBase;
-
-    // Create environment.
-    m_Env = std::make_unique<ARMVM::Environment>(mem, bridge);
-
-    // Create exclusive monitor.
-    m_ExMon = std::make_unique<dynarmic::ExclusiveMonitor>(1);
-
+void AArch64VM::setupJit() {
     // Build config.
-    dynarmic32::UserConfig cfg;
+    dynarmic64::UserConfig cfg;
     cfg.callbacks = m_Env.get();
-
-    switch (version) {
-        case GuestVersion::Armeabi:
-            cfg.arch_version = dynarmic32::ArchVersion::v5TE;
-            break;
-        case GuestVersion::Armeabi_v7a:
-            cfg.arch_version = dynarmic32::ArchVersion::v7;
-            break;
-        default:
-            DASHLE_UNREACHABLE("Invalid guest version!");
-    }
 
     if constexpr(dashle::DEBUG_MODE)
         cfg.optimizations = dynarmic::no_optimizations;
     else
         cfg.optimizations = dynarmic::all_safe_optimizations;
 
+    m_ExMon->Clear();
     cfg.global_monitor = m_ExMon.get();
 
     // Create jit.
-    m_Jit = std::make_unique<dynarmic32::Jit>(cfg);
+    m_Jit = std::move(std::make_unique<dynarmic64::Jit>(cfg));
+    m_Jit->SetSP(m_StackTop);
 }
 
-ARMVM::~ARMVM() { DASHLE_ASSERT(m_Mem->free(m_EndExecVAddr)); }
-
-dynarmic::HaltReason ARMVM::execute(Optional<uaddr> wrappedAddr) {
+dynarmic::HaltReason AArch64VM::execute(Optional<uaddr> wrappedAddr) {
     DASHLE_ASSERT(m_Jit);
 
     if (!wrappedAddr)
         return m_Jit->Run();
 
+    const auto stopAddr = m_StackBase;
     DASHLE_ASSERT_WRAPPER_CONST(addr, wrappedAddr);
-    m_Jit->Regs()[regs::LR] = m_EndExecVAddr;
-    setPC(addr);
+    // m_Jit->Regs()[regs::LR] = stopAddr;
+    m_Jit->SetPC(addr);
 
-    auto reason = VM_EXEC_SUCCESS;
-    while (reason == VM_EXEC_SUCCESS) {
+    auto reason = EXEC_SUCCESS;
+    while (reason == EXEC_SUCCESS) {
         reason = m_Jit->Run();
-        if (m_Jit->Regs()[regs::PC] == m_EndExecVAddr)
+        if (m_Jit->GetPC() == stopAddr)
             break;
 
-        DASHLE_LOG_LINE("PC: 0x{:X}, LR: 0x{:X}", m_Jit->Regs()[regs::PC], m_Jit->Regs()[regs::LR]);
-        if (m_Jit->Regs()[regs::PC] == 0x27C9A8)
-            dumpContext();
+        // DASHLE_LOG_LINE("PC: 0x{:X}, LR: 0x{:X}", m_Jit->Regs()[regs::PC], m_Jit->Regs()[regs::LR]);
     }
 
     return reason;
 }
 
-dynarmic::HaltReason ARMVM::step(Optional<uaddr> wrappedAddr) {
+dynarmic::HaltReason AArch64VM::step(Optional<uaddr> wrappedAddr) {
     DASHLE_ASSERT(m_Jit);
 
     if (wrappedAddr) {
         DASHLE_ASSERT_WRAPPER_CONST(addr, wrappedAddr);
-        setPC(addr);
+        m_Jit->SetPC(addr);
     }
 
     return m_Jit->Step();
 }
 
-void ARMVM::setRegister(usize id, u64 value) {
+void AArch64VM::setRegister(usize id, u64 value) {
     DASHLE_ASSERT(m_Jit);
 
+    /*
     if (id <= regs::R15) {
         m_Jit->Regs()[id] = value;
         return;
@@ -280,11 +251,13 @@ void ARMVM::setRegister(usize id, u64 value) {
     }
 
     DASHLE_UNREACHABLE("Invalid ID!");
+    */
 }
 
-u64 ARMVM::getRegister(usize id) const {
+u64 AArch64VM::getRegister(usize id) const {
     DASHLE_ASSERT(m_Jit);
 
+    /*
     if (id <= regs::R15)
         return m_Jit->Regs()[id];
 
@@ -296,22 +269,5 @@ u64 ARMVM::getRegister(usize id) const {
     }
 
     DASHLE_UNREACHABLE("Invalid ID!");
-}
-
-void ARMVM::dumpContext() const {
-    if constexpr(dashle::DEBUG_MODE) {
-        DASHLE_ASSERT(m_Jit);
-
-        constexpr const char* LABELS[] = {
-            "R0", "R1", "R2", "R3", "R4", "R5", "R6", "R7",
-            "R8", "R9", "R10", "R11 (FP)", "R12 (IP)", "R13 (SP)", "R14 (LR)", "R15 (PC)"
-        };
-
-        DASHLE_LOG_LINE("=== CONTEXT DUMP ===");
-        for (auto i = 0; i < 16; ++i)
-            DASHLE_LOG_LINE("{}: 0x{:08X}", LABELS[i], m_Jit->Regs()[i]);
-
-        DASHLE_LOG_LINE("CPSR: 0x{:08X}", m_Jit->Cpsr());
-        DASHLE_LOG_LINE("FSPCR: 0x{:08X}", m_Jit->Fpscr());
-    }
+    */
 }
