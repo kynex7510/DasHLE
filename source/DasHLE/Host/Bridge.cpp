@@ -91,7 +91,7 @@ Expected<void> Bridge::buildIFT() {
     EmitterMap emitters;
     while (m_Emitters.begin() != m_Emitters.end()) {
         auto node = m_Emitters.extract(m_Emitters.begin());
-        emitters.insert( { m_IFTBase +  node.key(), node.mapped() });
+        emitters.insert({ m_IFTBase + node.key(), node.mapped() });
     }
     m_Emitters = std::move(emitters);
 
