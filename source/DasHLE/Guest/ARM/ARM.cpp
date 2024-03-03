@@ -164,7 +164,7 @@ struct ARMVM::Environment final : public dynarmic32::UserCallbacks {
     }
 
     void AddTicks(std::uint64_t ticks) override {}
-    std::uint64_t GetTicksRemaining() override { return static_cast<u64>(-1); }
+    std::uint64_t GetTicksRemaining() override { return 0; }
 };
 
 // ARMVM
@@ -214,12 +214,15 @@ ARMVM::ARMVM(std::shared_ptr<host::memory::MemoryManager> mem, std::shared_ptr<h
             DASHLE_UNREACHABLE("Invalid guest version!");
     }
 
-    if constexpr(dashle::DEBUG_MODE)
-        cfg.optimizations = dynarmic::no_optimizations;
-    else
-        cfg.optimizations = dynarmic::all_safe_optimizations;
-
     cfg.global_monitor = m_ExMon.get();
+    cfg.enable_cycle_counting = false;
+    cfg.code_cache_size = 16u * 1024 * 1024;
+
+    if constexpr(dashle::DEBUG_MODE) {
+        cfg.optimizations = dynarmic::no_optimizations;
+    } else {
+        cfg.optimizations = dynarmic::all_safe_optimizations;
+    }
 
     // Create jit.
     m_Jit = std::make_unique<dynarmic32::Jit>(cfg);
